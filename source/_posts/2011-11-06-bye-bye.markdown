@@ -1,0 +1,47 @@
+---
+layout: post
+title: "Borland 要被收購了"
+date: 2009-05-07 20:49
+comments: true
+categories: 
+- programming
+- history
+- C and C++
+---
+[http://news.cnet.com/8301-1001_3-10234650-92.html](http://news.cnet.com/8301-1001_3-10234650-92.html)
+
+也差不多該死透了，核心人物早走光了，BCB sxxks。
+
+回顧過去 Borland 的歷史，以下是洽特的 yoco 整理的主要幾個事件時間點：
+
+[http://www.niceware.net/delphi/Borland_History.htm](http://www.niceware.net/delphi/Borland_History.htm)
+
+# 1992 #
+
+- 總裁 Philippe Kahn 決定花了一億多蓋了個超豪華總部，然後 Philippe Kahn 離開了 Borland，去了 Symantec，開發了 Symantec C++，我說這一手是故意的 XDDD
+- 花了一億多買了 dbase (另個網頁寫四億多)。請問現在還有洽眾在用 dbase 的嗎？這就對了！ XDDD
+- 在這個 moment，微軟開始大量從 Borland 挖角，Visual C++ 有 60% 的人是從 Borland 挖來的！
+
+# 1994 #
+Borland 的股價從 1992 年的 86 掉到 9.63。
+
+# 1995 #
+Delphi 1.0 發表，危急時刻拯救 Borland！但是就在這年，Borland 的 C++ 開始輸了，完全被微軟打死
+
+# 1996 #
+Anders Hejlsberg（神一般的男人，地球上過去二十年在軟體開發效率上的增進，有 90% 要歸功於他）被比爾蓋茲親自請去吃飯，成功挖角（事實上請了兩次才挖到XD），加入微軟。
+
+# 1997 #
+JBuilder 發表！Java 開發工具的里程碑阿！！！（2000 之後被免費的 Eclipse 打趴下 XDD）
+
+# 1998 #
+Borland 改名 Inpirse，準備改走企業用戶的高階路線。下場是完全失敗。
+
+# 2000 #
+名字改回來了 XD 然後放棄跟微軟抗爭，改成合作，在這之後一直沒什麼重大表現…
+
+# 2006 #
+賣掉旗下所有 IDE 產品！！！！！！！！！Borland 的命脈，聖杯！！！
+
+# 2009 #
+被買 XD
