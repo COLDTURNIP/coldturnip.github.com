@@ -4,6 +4,7 @@ title: "日記：931112"
 date: 2004-11-12 17:57
 comments: true
 categories: 
+- life log
 ---
 今天一整個被考試充滿 :)
 
