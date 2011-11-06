@@ -4,7 +4,7 @@
   <title><![CDATA[蘿蔔的待宵結界 ~ Lunatic Turnip ~]]></title>
   <link href="http://COLDTURNIP.github.com/atom.xml" rel="self"/>
   <link href="http://COLDTURNIP.github.com/"/>
-  <updated>2011-11-06T17:15:58+08:00</updated>
+  <updated>2011-11-06T17:24:48+08:00</updated>
   <id>http://COLDTURNIP.github.com/</id>
   <author>
     <name><![CDATA[Raphanus Lo]]></name>
@@ -12,14 +12,5 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
-  
-  <entry>
-    <title type="html"><![CDATA[This is the First Post!!]]></title>
-    <link href="http://COLDTURNIP.github.com/blog/2011/11/06/first-post/"/>
-    <updated>2011-11-06T17:05:00+08:00</updated>
-    <id>http://COLDTURNIP.github.com/blog/2011/11/06/first-post</id>
-    <content type="html"><![CDATA[<p>let me test &#8230;</p>
-]]></content>
-  </entry>
   
 </feed>
