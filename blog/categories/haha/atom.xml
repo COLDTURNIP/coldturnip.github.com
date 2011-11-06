@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom">
 
-  <title><![CDATA[蘿蔔的待宵結界 ~ Lunatic Turnip ~]]></title>
-  <link href="http://COLDTURNIP.github.com/atom.xml" rel="self"/>
+  <title><![CDATA[Category: haha | 蘿蔔的待宵結界 ~ Lunatic Turnip ~]]></title>
+  <link href="http://COLDTURNIP.github.com/blog/categories/haha/atom.xml" rel="self"/>
   <link href="http://COLDTURNIP.github.com/"/>
   <updated>2011-11-06T17:15:58+08:00</updated>
   <id>http://COLDTURNIP.github.com/</id>
@@ -18,7 +18,7 @@
     <link href="http://COLDTURNIP.github.com/blog/2011/11/06/first-post/"/>
     <updated>2011-11-06T17:05:00+08:00</updated>
     <id>http://COLDTURNIP.github.com/blog/2011/11/06/first-post</id>
-    <content type="html"><![CDATA[<p>let me test &#8230;</p>
+    <content type="html"><![CDATA[<p>let me test ...</p>
 ]]></content>
   </entry>
   
