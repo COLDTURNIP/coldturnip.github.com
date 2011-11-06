@@ -1,0 +1,667 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <title>Go 記憶體空間模型 - 蘿蔔的待宵結界 ~ Lunatic Turnip ~</title>
+  <meta name="author" content="Raphanus Lo">
+
+  
+  <meta name="description" content="譯序 本文譯自 The Go Memory Model，翻譯時原文刊載於 Go Programming Language Official Website，受 Creative Commons Attribution 3.0 License 保護。 本繁體中文版翻譯時參考了柴树杉與 Bian &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://COLDTURNIP.github.com/blog/2011/04/24/the-go-memory-model">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="/javascripts/ender.js"></script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <link href="/atom.xml" rel="alternate" title="蘿蔔的待宵結界 ~ Lunatic Turnip ~" type="application/atom+xml">
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="http://fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="http://fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+
+  
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">蘿蔔的待宵結界 ~ Lunatic Turnip ~</a></h1>
+  
+    <h2>THE PROJECTION OF MY SOUL</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+<form action="http://google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:COLDTURNIP.github.com" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+<ul class="main-navigation">
+  <li><a href="/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">Go 記憶體空間模型</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+  
+
+<time datetime="2011-04-24T22:43:00+08:00" pubdate>Apr 24<span>th</span>, 2011</time>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><h1>譯序</h1>
+
+<p>本文譯自 <a href="http://golang.org/doc/go_mem.html">The Go Memory Model</a>，翻譯時原文刊載於 <a href="http://golang.org/">Go Programming Language Official Website</a>，受 <a href="http://creativecommons.org/licenses/by/3.0/">Creative Commons Attribution 3.0 License</a> 保護。</p>
+
+<p>本繁體中文版翻譯時參考了<a href="http://bbs.golang-china.org/viewtopic.php?f=4&amp;t=24">柴树杉與 Bian Jiang 合譯的簡體中文版本</a>，該文刊載於 <a href="http://bbs.golang-china.org/">Go 语言中文论坛</a>。</p>
+
+<p>曾經有人問為何會翻這篇文章，其實在翻譯當時我只想知道 Go 的執行期 memory layout 長成什麼樣子，但顯然這篇主要討論的方向不在此，於是一切都只是一場美麗的誤會 :P</p>
+
+<h1>Introduction – 簡介</h1>
+
+<p>本《Go 記憶體空間模型》一文所描述的內容為，針對同一變數，在一個 goroutine 上對該變數進行寫入，如何得以保證在另一 goroutine 上得以正確讀取前述寫入值。</p>
+
+<h1><a name="happens_before"></a>Happens Before – 在…之前</h1>
+
+<p>就單一 goroutine 的執行，只保證所有的讀／寫行為就結果上應等同於其原始碼設計；也就是說，如果表現的行為不變，編譯器和處理器得以任意排列同一 goroutine 內的所有記憶體讀／寫順序。也因為允許如此重新排序，即使執行的內容相同，每個不同的 goroutine 上彼此看見對方的執行順序都可能有所不同。舉例來說，如果一個 goroutine 的程式碼寫著 <code>a = 1; b = 2;</code>，實際執行時在另一個 goroutine 上回頭一望，可能會看到 <code>b</code> 的值先被更新，而後 <code>a</code> 的值才被改變。</p>
+
+<p>以下為了描述程式對於讀／寫記憶體的請求，對於部份程式區段的記憶體操作，我們先定義何為「在…前發生」。<em>如果事件 e1 在事件 e2 之前發生，那麼我們也可以說 e2 在 e1 之後發生。同理，如果 e1 不在 e2 之前發生，且亦不在 e2 之後發生，那麼我們說 e1 與 e2 同時發生。</em></p>
+
+<p>在單一的 goroutine 內，記憶體操作的順序是與原始碼相同的。</p>
+
+<p>在以下條件下，針對變數 v 的讀取事件 r，可以取得同對變數 v 的寫入事件 w 的內容：</p>
+
+<ol>
+<li>w 在 r 之前發生。</li>
+<li>在 w 之後、 r 之前的時間區間內，沒有其它對於 v 的寫入事件 w’ 發生。</li>
+</ol>
+
+
+<p>為了保證一項對於變數 v 的讀取事件 r 不但<em>可以</em>感知寫入事件 w、且 r 實際讀取的值即為 w 所寫入的值，我們還必須保證 w 是唯一一個可以被 r 感知的寫入事件：</p>
+
+<ol>
+<li>w 在 r 之前發生。</li>
+<li>所有其它對於共享變數 v 的寫入事件都發生在 w 之前或 r 之後。</li>
+</ol>
+
+
+<p>後述這組條件較前述一組來得強健；它進一步限制其它寫入事件不得與 w 或 r 同時發生。</p>
+
+<p>在單一 goroutine 內，沒有任何事件可以同時發生，所以此二條款等價於以下敘述：同對於變數 v，一個讀取事件 r 將讀取最近一次寫入事件 w 之結果。而在多 goroutine 同對共享變數 v 進行操作時，必須利用一些同步操作才得以建立前述的有序環境，保證對於變數的讀取事件皆對讀到相應的寫入事件。</p>
+
+<p>對於變數 v 的零值初始化動作，在本記憶體模型內為一寫入事件。</p>
+
+<p>如果讀／寫事件的內容值比單機器字長（machine word）來得長，那麼視為多次、與機器字長等長的不定順序讀／寫操作。</p>
+
+<h1>Synchronization – 同步</h1>
+
+<h2>Initialization – 初始化</h2>
+
+<p>整個程式的所有初始化行為都在單一 goroutine 內進行，而其中產生的新的 goroutine 會在整個初始化結束之後才真正開始運行。</p>
+
+<p>如果一個 package <strong>p</strong> 引用了另一個 package <strong>q</strong>，則 <strong>q</strong> 的所有 <code>init</code> 函式將在 <strong>p</strong> 的任何 <code>init</code> 函式開始前結束。</p>
+
+<p>主函式 <code>main.main</code> 在所有 <code>init</code> 函式結束後才開始執行。</p>
+
+<p>在某一 <code>init</code> 函式內的 goroutine 創建，會等到所有 <code>init</code> 函式全部結束後才真正開始創建。</p>
+
+<h2>Goroutine creation – 創建 Goroutine</h2>
+
+<p>go 描述式會在 goroutine 內的程序開始執行之前創建新的 goroutine。</p>
+
+<p>舉例而言，在下列的程式中：</p>
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="k">var</span> <span class="n">a</span> <span class="nb">string</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">func</span> <span class="n">f</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">print</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">func</span> <span class="n">hello</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">a</span> <span class="p">=</span> <span class="s">&quot;哈囉，世界&quot;</span>
+</span><span class='line'>  <span class="k">go</span> <span class="n">f</span><span class="p">()</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>呼叫 <code>hello</code> 會在稍後時間點印出<code>「哈囉，世界」</code>（甚至可能在 <code>hello</code> 返回之後）</p>
+
+<h2>Channel communication – Channel 通訊</h2>
+
+<p>channel 通訊是 goroutine 之間主要的同步手段。對等定的通道的所有發送動作都一定要有相應的接收，而這一送一收的動作通常發生在兩個不同的 goroutine 上。</p>
+
+<p>對一個 channel 的發送行為一定會在相應的接收行為完成之前完成。</p>
+
+<p>參考以下程式碼：</p>
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="k">var</span> <span class="n">c</span> <span class="p">=</span> <span class="nb">make</span><span class="p">(</span><span class="k">chan</span> <span class="nb">int</span><span class="p">,</span> <span class="mi">10</span><span class="p">)</span>
+</span><span class='line'><span class="k">var</span> <span class="n">a</span> <span class="nb">string</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">func</span> <span class="n">f</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">a</span> <span class="p">=</span> <span class="s">&quot;哈囉，世界&quot;</span>
+</span><span class='line'>  <span class="n">c</span> <span class="p">&lt;-</span> <span class="mi">0</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">func</span> <span class="n">main</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="k">go</span> <span class="n">f</span><span class="p">()</span>
+</span><span class='line'>  <span class="p">&lt;-</span><span class="n">c</span>
+</span><span class='line'>  <span class="n">print</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>上述程式將被保證印出「<code>哈囉，世界</code>」。這是因為，對於 <code>a</code> 的寫入行為在對 <code>c</code> 發送訊息之前完成，而對 <code>c</code> 的發送行為必在其接收行為完成之前發生，又接收行為必在 <code>print</code> 之前。</p>
+
+<p>對一不帶緩衝區的 channel，接收行為必在發送完成之前發生。</p>
+
+<p>參考以下程式碼（與前例相似，但將送收角色對換、且改採無緩衝 channel）：</p>
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="k">var</span> <span class="n">c</span> <span class="p">=</span> <span class="nb">make</span><span class="p">(</span><span class="k">chan</span> <span class="nb">int</span><span class="p">)</span>
+</span><span class='line'><span class="k">var</span> <span class="n">a</span> <span class="nb">string</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">func</span> <span class="n">f</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">a</span> <span class="p">=</span> <span class="s">&quot;哈囉，世界&quot;</span>
+</span><span class='line'>  <span class="p">&lt;-</span><span class="n">c</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">func</span> <span class="n">main</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="k">go</span> <span class="n">f</span><span class="p">()</span>
+</span><span class='line'>  <span class="n">c</span> <span class="p">&lt;-</span> <span class="mi">0</span>
+</span><span class='line'>  <span class="n">print</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>上述程式亦可保證印出「<code>哈囉，世界</code>」。對 <code>a</code> 的寫入行為早於對 <code>c</code> 的接收行為，而此接收行為必在發送行為完成之前開始，而發送行為又早於 <code>print</code>。</p>
+
+<p>如果使用帶緩衝的 channel（意即宣告 <code>c = make(chan int, 1)</code>），則本例無法保證可以正確印出「<code>哈囉，世界</code>」。（它可能頂多印出空字串；它不會印出「<code>再見，宇宙</code>」或是讓程式崩潰。）</p>
+
+<h2>Locks – 同步鎖</h2>
+
+<p><code>sync</code> 這個 package 實作了兩種類型的同步鎖，<code>sync.Mutex</code> 與 <code>sync.RWMutex</code>。</p>
+
+<p>對於任一 <code>sync.Mutex</code> 或 <code>sync.RWMutex</code> 變數 <code>l</code>，且 n &lt; m，則第 n 次叫用 <code>l.Unlock()</code> 必在第 m 次的 <code>l.Lock()</code> 返回之前發生。</p>
+
+<p>參考以下程式碼：</p>
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="k">var</span> <span class="n">l</span> <span class="n">sync</span><span class="p">.</span><span class="n">Mutex</span>
+</span><span class='line'><span class="k">var</span> <span class="n">a</span> <span class="nb">string</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">func</span> <span class="n">f</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">a</span> <span class="p">=</span> <span class="s">&quot;哈囉，世界&quot;</span>
+</span><span class='line'>  <span class="n">l</span><span class="p">.</span><span class="n">Unlock</span><span class="p">()</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">func</span> <span class="n">main</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">l</span><span class="p">.</span><span class="n">Lock</span><span class="p">()</span>
+</span><span class='line'>  <span class="k">go</span> <span class="n">f</span><span class="p">()</span>
+</span><span class='line'>  <span class="n">l</span><span class="p">.</span><span class="n">Lock</span><span class="p">()</span>
+</span><span class='line'>  <span class="n">print</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>此程式可保證印出「<code>哈囉，世界</code>」。第一次呼叫 <code>l.Unlock()</code>（位於 f 內）必在第二次 <code>l.Lock()</code>（位於 <code>main</code>）返回之前，意即於 <code>print</code> 之前呼叫。</p>
+
+<p>對於任何 <code>sync.RWMutex</code> 變數 <code>l</code>，若在第 n 次呼叫 <code>l.Unlock</code> 之後調用 <code>l.RLock</code>，則其相應的 <code>l.RUnlock</code> 必發生於第 n+1 次呼叫 <code>l.Lock</code> 之前。</p>
+
+<h2>Once – 單次執行</h2>
+
+<p><code>sync</code> package 保證多 goroutine 間的得以安全地進行初始化，提供一個變數型態 <code>Once</code> 以控制之。針對特定函式 <code>f</code>，多個執行緒可以同時調用 <code>once.Do(f)</code> 試圖執行之，但 <code>f()</code> 只會被實際執行一次，且在被實際執行的 <code>f()</code> 返回前，其它的 <code>once.Do(f)</code> 調用者都會被鎖住。</p>
+
+<p>利用 <code>once.Do(f)</code> 呼叫的 <code>f()</code> 必在任何 <code>once.Do(f)</code> 返回前單次執行並返回。</p>
+
+<p>參考以下程式碼：</p>
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="k">var</span> <span class="n">a</span> <span class="nb">string</span>
+</span><span class='line'><span class="k">var</span> <span class="n">once</span> <span class="n">sync</span><span class="p">.</span><span class="n">Once</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">func</span> <span class="n">setup</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">a</span> <span class="p">=</span> <span class="s">&quot;哈囉，世界&quot;</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">func</span> <span class="n">doprint</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">once</span><span class="p">.</span><span class="n">Do</span><span class="p">(</span><span class="n">setup</span><span class="p">)</span>
+</span><span class='line'>  <span class="n">print</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">func</span> <span class="n">twoprint</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="k">go</span> <span class="n">doprint</span><span class="p">()</span>
+</span><span class='line'>  <span class="k">go</span> <span class="n">doprint</span><span class="p">()</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>呼叫 <code>twoprint</code> 會印出兩次「<code>哈囉，世界</code>」。只有第一次呼叫 <code>twoprint</code> 會執行 <code>setup</code>。</p>
+
+<h2>Incorrect synchronization – 錯誤的同步方式</h2>
+
+<p>注意，如果讀取事件 r 和寫入事件 w 同時發生，r 或許能夠讀取 w 寫入的值；即便如此，這項事實並不意味著在 r 之後的讀取事件可以讀到 w 之前發生的寫入事件的值。</p>
+
+<p>參考以下程式碼：</p>
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="k">var</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span> <span class="nb">int</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">func</span> <span class="n">f</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">a</span> <span class="p">=</span> <span class="mi">1</span>
+</span><span class='line'>  <span class="n">b</span> <span class="p">=</span> <span class="mi">2</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">func</span> <span class="n">g</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">print</span><span class="p">(</span><span class="n">b</span><span class="p">)</span>
+</span><span class='line'>  <span class="n">print</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">func</span> <span class="n">main</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="k">go</span> <span class="n">f</span><span class="p">()</span>
+</span><span class='line'>  <span class="n">g</span><span class="p">()</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>此例中的 <code>g</code> 有可能先印出 <code>2</code> 再印出 <code>0</code>。（譯註：參考<a href="#happens_before">《Happens Before》一節</a>，「如果表現的行為不變，編譯器和處理器得以任意排列同一 goroutine 內的所有記憶體讀／寫順序」，所以函式 <code>f</code> 可能被重排成 <code>b = 2; a = 1</code>）</p>
+
+<p>這個特性會使得一些過去常用的同步做法失效。</p>
+
+<p>二次檢查鎖過去被用來迴避同步所造成的系統負擔。舉例來說，前例的 <code>twoprint</code> 函式可能被錯誤地寫成：</p>
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="k">var</span> <span class="n">a</span> <span class="nb">string</span>
+</span><span class='line'><span class="k">var</span> <span class="n">done</span> <span class="n">bool</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">func</span> <span class="n">setup</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">a</span> <span class="p">=</span> <span class="s">&quot;哈囉，世界&quot;</span>
+</span><span class='line'>  <span class="n">done</span> <span class="p">=</span> <span class="n">true</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">func</span> <span class="n">doprint</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="k">if</span> <span class="p">!</span><span class="n">done</span> <span class="p">{</span>
+</span><span class='line'>      <span class="n">once</span><span class="p">.</span><span class="n">Do</span><span class="p">(</span><span class="n">setup</span><span class="p">)</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>  <span class="n">print</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">func</span> <span class="n">twoprint</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="k">go</span> <span class="n">doprint</span><span class="p">()</span>
+</span><span class='line'>  <span class="k">go</span> <span class="n">doprint</span><span class="p">()</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>但是這樣的同步機制現在無效了。理想上，在 <code>doprint</code> 裡，籍由觀測 <code>done</code> 是否被寫入值意味著 <code>a</code> 是否完成寫入；實際上，「<code>哈囉，世界</code>」可能不被印出，取而代之的是空字串。</p>
+
+<p>另外一個過去常用的同步手段是忙碌鎖，像是這樣：</p>
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="k">var</span> <span class="n">a</span> <span class="nb">string</span>
+</span><span class='line'><span class="k">var</span> <span class="n">done</span> <span class="n">bool</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">func</span> <span class="n">setup</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">a</span> <span class="p">=</span> <span class="s">&quot;哈囉，世界&quot;</span>
+</span><span class='line'>  <span class="n">done</span> <span class="p">=</span> <span class="n">true</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">func</span> <span class="n">main</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="k">go</span> <span class="n">setup</span><span class="p">()</span>
+</span><span class='line'>  <span class="k">for</span> <span class="p">!</span><span class="n">done</span> <span class="p">{</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>  <span class="n">print</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>一如前例，在 <code>main</code> 中觀查 <code>done</code> 是否被寫入，無法保證 <code>a</code> 是否被賦值，所以同理可能印出空字串。更糟的是，因為在兩個執行緒之間並沒有明確的同步事件，所以就連 <code>done</code> 的寫入事件也無法保證能被 <code>main</code> 所觀察，因此有機會在 <code>main</code> 造成無窮迴圈。</p>
+
+<p>在此還有個微妙的變種，參見以下程式：</p>
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="k">type</span> <span class="n">T</span> <span class="k">struct</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">msg</span> <span class="nb">string</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">var</span> <span class="n">g</span> <span class="p">*</span><span class="n">T</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">func</span> <span class="n">setup</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">t</span> <span class="p">:=</span> <span class="nb">new</span><span class="p">(</span><span class="n">T</span><span class="p">)</span>
+</span><span class='line'>  <span class="n">t</span><span class="p">.</span><span class="n">msg</span> <span class="p">=</span> <span class="s">&quot;哈囉，世界&quot;</span>
+</span><span class='line'>  <span class="n">g</span> <span class="p">=</span> <span class="n">t</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">func</span> <span class="n">main</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="k">go</span> <span class="n">setup</span><span class="p">()</span>
+</span><span class='line'>  <span class="k">for</span> <span class="n">g</span> <span class="p">==</span> <span class="n">nil</span> <span class="p">{</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>  <span class="n">print</span><span class="p">(</span><span class="n">g</span><span class="p">.</span><span class="n">msg</span><span class="p">)</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>即便 <code>main</code> 觀察到 <code>g != nil</code> 發生而決定是否離開迴圈，<code>g.msg</code> 也不一定已經完成它的初始化。（譯註：因為 <code>setup</code> 可能被重排成 <code>g = new(T); g.msg = "哈囉，世界"</code>，因此 <code>g != nil</code> 時 <code>g.msg</code> 可能尚未被賦值。）</p>
+
+<p>綜觀以上數例，其解決方案始終如一：以明確的方式進行同步。</p>
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">Raphanus Lo</span></span>
+
+      
+
+
+
+
+  
+
+<time datetime="2011-04-24T22:43:00+08:00" pubdate>Apr 24<span>th</span>, 2011</time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/golang/'>golang</a>, <a class='category' href='/blog/categories/programming/'>programming</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="http://twitter.com/share" class="twitter-share-button" data-url="http://COLDTURNIP.github.com/blog/2011/04/24/the-go-memory-model/" data-via="" data-counturl="http://COLDTURNIP.github.com/blog/2011/04/24/the-go-memory-model/" >Tweet</a>
+  
+  
+  <div class="g-plusone" data-size="medium"></div>
+  
+  
+    <div class="fb-like" data-send="true" data-width="450" data-show-faces="false"></div>
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2010/11/27/go-snippets-for-vim/" title="Previous Post: Go snippets for VIM">&laquo; Go snippets for VIM</a>
+      
+      
+    </p>
+  </footer>
+</article>
+
+  <section>
+    <h1>Comments</h1>
+    <div id="disqus_thread" aria-live="polite"><noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+</div>
+  </section>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2011/04/24/the-go-memory-model/">Go 記憶體空間模型</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2010/11/27/go-snippets-for-vim/">Go snippets for VIM</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2009/11/15/the-tale-of-the-bamboo-cutter/">《竹取物語》略譯</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2009/11/15/literature-and-my-classmates-in-high-school/">高中時期的文學創作</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2009/07/06/a-letter-from-my-boss/">前陣子又和未來老闆通了幾封信</a>
+      </li>
+    
+  </ul>
+</section>
+
+
+
+
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2011 - Raphanus Lo -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+<script type="text/javascript">
+      var disqus_shortname = 'cdiplog';
+      
+        
+        // var disqus_developer = 1;
+        var disqus_identifier = 'http://COLDTURNIP.github.com/blog/2011/04/24/the-go-memory-model';
+        var disqus_url = 'http://COLDTURNIP.github.com/blog/2011/04/24/the-go-memory-model';
+        var disqus_script = 'embed.js';
+      
+    (function () {
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      dsq.src = 'http://' + disqus_shortname + '.disqus.com/' + disqus_script;
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    }());
+</script>
+
+
+
+<div id="fb-root"></div>
+<script>(function(d, s, id) {
+  var js, fjs = d.getElementsByTagName(s)[0];
+  if (d.getElementById(id)) {return;}
+  js = d.createElement(s); js.id = id;
+  js.src = "//connect.facebook.net/en_US/all.js#appId=212934732101925&xfbml=1";
+  fjs.parentNode.insertBefore(js, fjs);
+}(document, 'script', 'facebook-jssdk'));</script>
+
+
+
+  <script type="text/javascript">
+    (function() {
+      var script = document.createElement('script'); script.type = 'text/javascript'; script.async = true;
+      script.src = 'https://apis.google.com/js/plusone.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(script, s);
+    })();
+  </script>
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = 'http://platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>

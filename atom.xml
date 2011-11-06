@@ -4,7 +4,7 @@
   <title><![CDATA[蘿蔔的待宵結界 ~ Lunatic Turnip ~]]></title>
   <link href="http://COLDTURNIP.github.com/atom.xml" rel="self"/>
   <link href="http://COLDTURNIP.github.com/"/>
-  <updated>2011-11-06T18:12:36+08:00</updated>
+  <updated>2011-11-06T23:15:31+08:00</updated>
   <id>http://COLDTURNIP.github.com/</id>
   <author>
     <name><![CDATA[Raphanus Lo]]></name>
@@ -14,203 +14,1646 @@
 
   
   <entry>
-    <title type="html"><![CDATA[日記：041113]]></title>
-    <link href="http://COLDTURNIP.github.com/blog/2004/11/13/diary-041113/"/>
-    <updated>2004-11-13T18:03:00+08:00</updated>
-    <id>http://COLDTURNIP.github.com/blog/2004/11/13/diary-041113</id>
-    <content type="html"><![CDATA[<p>主要是看到這篇文章有所感觸…</p>
+    <title type="html"><![CDATA[Go 記憶體空間模型]]></title>
+    <link href="http://COLDTURNIP.github.com/blog/2011/04/24/the-go-memory-model/"/>
+    <updated>2011-04-24T22:43:00+08:00</updated>
+    <id>http://COLDTURNIP.github.com/blog/2011/04/24/the-go-memory-model</id>
+    <content type="html"><![CDATA[<h1>譯序</h1>
 
-<blockquote><p>作者 Rickz (XiaoMieZhongHuaMinGuo) 站內 test
-標題 看六次電影 VS. 修六次電腦
-時間 Sat Nov 6 04:28:27 2004
-───────────────────────────────────────</p>
+<p>本文譯自 <a href="http://golang.org/doc/go_mem.html">The Go Memory Model</a>，翻譯時原文刊載於 <a href="http://golang.org/">Go Programming Language Official Website</a>，受 <a href="http://creativecommons.org/licenses/by/3.0/">Creative Commons Attribution 3.0 License</a> 保護。</p>
 
-<p>原來修電腦的C/P值這麼低, 下次要幫女生修電腦前先考慮一下好了</p>
+<p>本繁體中文版翻譯時參考了<a href="http://bbs.golang-china.org/viewtopic.php?f=4&amp;t=24">柴树杉與 Bian Jiang 合譯的簡體中文版本</a>，該文刊載於 <a href="http://bbs.golang-china.org/">Go 语言中文论坛</a>。</p>
 
-<p>嗯，前幾天又跟個女性朋友聊到強者我朋友，是的，</p>
+<p>曾經有人問為何會翻這篇文章，其實在翻譯當時我只想知道 Go 的執行期 memory layout 長成什麼樣子，但顯然這篇主要討論的方向不在此，於是一切都只是一場美麗的誤會 :P</p>
 
-<p>不要懷疑，就是我三大花花公子好友中的一個，</p>
+<h1>Introduction – 簡介</h1>
 
-<p>女：「我一直認為某某對女孩子很好耶」</p>
+<p>本《Go 記憶體空間模型》一文所描述的內容為，針對同一變數，在一個 goroutine 上對該變數進行寫入，如何得以保證在另一 goroutine 上得以正確讀取前述寫入值。</p>
 
-<p>男：「可以舉個例子嗎？」</p>
+<h1><a name="happens_before"></a>Happens Before – 在…之前</h1>
 
-<p>女：「他可以陪女孩子看六次一模一樣的電影，儘管他對那部片子沒興趣」</p>
+<p>就單一 goroutine 的執行，只保證所有的讀／寫行為就結果上應等同於其原始碼設計；也就是說，如果表現的行為不變，編譯器和處理器得以任意排列同一 goroutine 內的所有記憶體讀／寫順序。也因為允許如此重新排序，即使執行的內容相同，每個不同的 goroutine 上彼此看見對方的執行順序都可能有所不同。舉例來說，如果一個 goroutine 的程式碼寫著 <code>a = 1; b = 2;</code>，實際執行時在另一個 goroutine 上回頭一望，可能會看到 <code>b</code> 的值先被更新，而後 <code>a</code> 的值才被改變。</p>
 
-<p>男：「例子頗差，比較起來，我還可以幫女孩子修六次電腦，重灌六次該死得一模一樣的
-WINXP，更重要一點是整個過程一點都不讓人愉快…. 」</p>
+<p>以下為了描述程式對於讀／寫記憶體的請求，對於部份程式區段的記憶體操作，我們先定義何為「在…前發生」。<em>如果事件 e1 在事件 e2 之前發生，那麼我們也可以說 e2 在 e1 之後發生。同理，如果 e1 不在 e2 之前發生，且亦不在 e2 之後發生，那麼我們說 e1 與 e2 同時發生。</em></p>
 
-<p>女：「那不一樣」</p>
+<p>在單一的 goroutine 內，記憶體操作的順序是與原始碼相同的。</p>
 
-<p>男：「是不一樣啊，修一次電腦至少要花上千元，重灌更要一整天，而看電影不過就只是
-花500元，呆在一個地方2小時，還有冷氣吹那邊更辛苦，一目了然吧。」</p>
+<p>在以下條件下，針對變數 v 的讀取事件 r，可以取得同對變數 v 的寫入事件 w 的內容：</p>
 
-<p>男：「可是至少我義務幫人修電腦到現在還沒人說過我對人好或者溫柔體貼妳今天反而說
-陪女孩子看六次一模一樣的電影是溫柔體貼？真令人訝異進一步分析，我們會發現，哪有
-人會看六次一模一樣的電影呢？除非他是陪不同的女人去看，而如果是陪六個不同的美女
-看同一部電影，那種程度的溫柔我也OK好吧！」</p>
+<ol>
+<li>w 在 r 之前發生。</li>
+<li>在 w 之後、 r 之前的時間區間內，沒有其它對於 v 的寫入事件 w’ 發生。</li>
+</ol>
 
-<p>男：「我不認為以你的智慧無法區辨溫柔跟既得利益的不同。所以關鍵並不是他實際上溫
-不溫柔體不體貼，其實妳已經喜歡他了，所以認為他的一切都是好的，溫柔體貼不過是浮
-在現象表面上的謊言罷了。」</p>
 
-<p>這段偶發性的對話引起了我的好奇，我拿這個問題去問了一下幾個女性朋友發現到一個有
-趣的事實：</p>
+<p>為了保證一項對於變數 v 的讀取事件 r 不但<em>可以</em>感知寫入事件 w、且 r 實際讀取的值即為 w 所寫入的值，我們還必須保證 w 是唯一一個可以被 r 感知的寫入事件：</p>
 
-<p>大多數的女人都會認為陪看電影六次的人才叫溫柔體貼。</p>
+<ol>
+<li>w 在 r 之前發生。</li>
+<li>所有其它對於共享變數 v 的寫入事件都發生在 w 之前或 r 之後。</li>
+</ol>
 
-<p>對於這個違反邏輯的結果，</p>
 
-<p>我推論了一下可能的答案，</p>
+<p>後述這組條件較前述一組來得強健；它進一步限制其它寫入事件不得與 w 或 r 同時發生。</p>
 
-<p>就行為的連結性而言，看電影總是快樂的，</p>
+<p>在單一 goroutine 內，沒有任何事件可以同時發生，所以此二條款等價於以下敘述：同對於變數 v，一個讀取事件 r 將讀取最近一次寫入事件 w 之結果。而在多 goroutine 同對共享變數 v 進行操作時，必須利用一些同步操作才得以建立前述的有序環境，保證對於變數的讀取事件皆對讀到相應的寫入事件。</p>
 
-<p>陪著看電影的人會因此而與快樂的感覺做連結</p>
+<p>對於變數 v 的零值初始化動作，在本記憶體模型內為一寫入事件。</p>
 
-<p>電腦故障總是痛苦的，幫修電腦的人容易因此而與痛苦的記憶作連結</p>
+<p>如果讀／寫事件的內容值比單機器字長（machine word）來得長，那麼視為多次、與機器字長等長的不定順序讀／寫操作。</p>
 
-<p>從另一個角度看，比較起修電腦，看電影幾乎只要沒瞎人人都可以做到</p>
+<h1>Synchronization – 同步</h1>
 
-<p>但修電腦卻具備技術性，所以只有少部分人可以做</p>
+<h2>Initialization – 初始化</h2>
 
-<p>這樣看來，被女人找去修電腦，其實並不值得高興，</p>
+<p>整個程式的所有初始化行為都在單一 goroutine 內進行，而其中產生的新的 goroutine 會在整個初始化結束之後才真正開始運行。</p>
 
-<p>那只代表他需要你幫他修電腦而已，</p>
+<p>如果一個 package <strong>p</strong> 引用了另一個 package <strong>q</strong>，則 <strong>q</strong> 的所有 <code>init</code> 函式將在 <strong>p</strong> 的任何 <code>init</code> 函式開始前結束。</p>
 
-<p>如果是被找去看電影，那就不緊緊只是看電影而已，</p>
+<p>主函式 <code>main.main</code> 在所有 <code>init</code> 函式結束後才開始執行。</p>
 
-<p>那還代表你擁有更大的空間進入他的生活，</p>
+<p>在某一 <code>init</code> 函式內的 goroutine 創建，會等到所有 <code>init</code> 函式全部結束後才真正開始創建。</p>
 
-<p>至少還可以幫她修電腦，</p>
+<h2>Goroutine creation – 創建 Goroutine</h2>
 
-<p>所以如果真的要想追一個女孩子對她好，當個好人根本不是該進行的投資，</p>
+<p>go 描述式會在 goroutine 內的程序開始執行之前創建新的 goroutine。</p>
 
-<p>真正該做的是：約她去玩，然後讓她答應。</p>
+<p>舉例而言，在下列的程式中：</p>
 
-<p>如果她不答應，投資時間在研究如何讓她答應上，在約她出去玩</p>
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="k">var</span> <span class="n">a</span> <span class="nb">string</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">func</span> <span class="n">f</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">print</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">func</span> <span class="n">hello</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">a</span> <span class="p">=</span> <span class="s">&quot;哈囉，世界&quot;</span>
+</span><span class='line'>  <span class="k">go</span> <span class="n">f</span><span class="p">()</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
 
-<p>至於投資「當好人」這件事 …. 那就只好等著接好人牌囉！</p>
 
-<p>Point觀後感：以後誰誰誰叫你去幫他修電腦，絕對不要答應！</p>
+<p>呼叫 <code>hello</code> 會在稍後時間點印出<code>「哈囉，世界」</code>（甚至可能在 <code>hello</code> 返回之後）</p>
 
-<p>以後誰誰誰說想要去看場電影，絕對死跟到底！</p></blockquote>
+<h2>Channel communication – Channel 通訊</h2>
 
-<p>頗偏激的結論，不過這篇文章寫出很多多多少少會修電腦點電腦的人的不滿。</p>
+<p>channel 通訊是 goroutine 之間主要的同步手段。對等定的通道的所有發送動作都一定要有相應的接收，而這一送一收的動作通常發生在兩個不同的 goroutine 上。</p>
 
-<p>許多修電腦的經驗是：對於電腦的情況一問三不知，然後問了太多問題或者要提出許多問題當做考量時又很容易被當成囉唆。除非是簡單的問題，不然有些問題常常會由製造廠商 (某公司或人) 揹黑鍋、踩上花錢消災一途。</p>
+<p>對一個 channel 的發送行為一定會在相應的接收行為完成之前完成。</p>
 
-<p>所以很為難，尤其是組裝電腦。因為你很難完全了解對方的所有情況，但是要考量的因素還是非常多，又不能問太多問題；相較之下，直接拒絕對方會造成的友情損失小得很多。</p>
+<p>參考以下程式碼：</p>
 
-<p>像是我的原則是：除非是熟人，不然很難叫我幫忙幫到底。這不是幫忙寫作業，即使是一點很看起來很合理的事情發生之後也可能造成嚴重的後果，例如作業系統無法運作，或是開機磁區壞軌。</p>
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="k">var</span> <span class="n">c</span> <span class="p">=</span> <span class="nb">make</span><span class="p">(</span><span class="k">chan</span> <span class="nb">int</span><span class="p">,</span> <span class="mi">10</span><span class="p">)</span>
+</span><span class='line'><span class="k">var</span> <span class="n">a</span> <span class="nb">string</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">func</span> <span class="n">f</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">a</span> <span class="p">=</span> <span class="s">&quot;哈囉，世界&quot;</span>
+</span><span class='line'>  <span class="n">c</span> <span class="p">&lt;-</span> <span class="mi">0</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">func</span> <span class="n">main</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="k">go</span> <span class="n">f</span><span class="p">()</span>
+</span><span class='line'>  <span class="p">&lt;-</span><span class="n">c</span>
+</span><span class='line'>  <span class="n">print</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
 
-<p>光是不能開機就有分很多種了，電源問題、主機板爆漿、記憶體掛了、CPU 過熱、排線鬆了找不到硬碟、找到硬碟卻偵測不到 Windows、開機磁區壞軌、Windows 因為某原因進入休克迴圈、Windows 啟動時由於同時載入太多程式造成硬體忙不過來……每一種都足以構成「我的電腦壞了」，對於有些可能連主機板是什麼都不曉得的使用者們，我們從何問起？</p>
 
-<p>雖然我曾在 Linux 看到一句話說得有理：「使用電腦是因，了解電腦是果；電腦容易使用的程度才是造福人類的作法，而不是刁難。」</p>
+<p>上述程式將被保證印出「<code>哈囉，世界</code>」。這是因為，對於 <code>a</code> 的寫入行為在對 <code>c</code> 發送訊息之前完成，而對 <code>c</code> 的發送行為必在其接收行為完成之前發生，又接收行為必在 <code>print</code> 之前。</p>
 
-<p>曾經有人提過：為了要讓以後 DIY 更加容易，我們應該在每張卡的規格統一，而且做成卡匣式以利購買。</p>
+<p>對一不帶緩衝區的 channel，接收行為必在發送完成之前發生。</p>
 
-<p>可是這樣太過頭了；原本的裸板已經有散熱問題了，卡匣式怎麼處理？又像針腳不同的問題，針腳不同也是為了加速資料傳輸才有針腳的不同；統一要如何統一？</p>
+<p>參考以下程式碼（與前例相似，但將送收角色對換、且改採無緩衝 channel）：</p>
 
-<p>很難想像吧，CPU 的針腳、RAM 的針腳、ATA 排線和 S-ATA 排線、擴充卡插槽，每種插槽傳輸的資料都不同。</p>
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="k">var</span> <span class="n">c</span> <span class="p">=</span> <span class="nb">make</span><span class="p">(</span><span class="k">chan</span> <span class="nb">int</span><span class="p">)</span>
+</span><span class='line'><span class="k">var</span> <span class="n">a</span> <span class="nb">string</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">func</span> <span class="n">f</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">a</span> <span class="p">=</span> <span class="s">&quot;哈囉，世界&quot;</span>
+</span><span class='line'>  <span class="p">&lt;-</span><span class="n">c</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">func</span> <span class="n">main</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="k">go</span> <span class="n">f</span><span class="p">()</span>
+</span><span class='line'>  <span class="n">c</span> <span class="p">&lt;-</span> <span class="mi">0</span>
+</span><span class='line'>  <span class="n">print</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
 
-<p>許多年前的電腦使用者，真的很難想像現在的情況；以前的 CPU 電壓要自己手動改變主機板的跳針位置，滑鼠線盤的插腳也不是現在的 PS/2 或者近乎絕種的 com1、com2，裝個音效卡還有「聲霸卡」和「音效卡」兩大陣營，顯示卡和 3D 加速卡是分開的兩種東西，RAM 還要插兩條一模一樣規格廠牌的才能跑。</p>
 
-<p>在更早的電腦，要在兩台不同硬體規格的電腦上跑相同的作業系統，那是多麼不可思議的事情！DIY？在那個時代裡面這個字眼跟要豬在天空飛一樣。</p>
+<p>上述程式亦可保證印出「<code>哈囉，世界</code>」。對 <code>a</code> 的寫入行為早於對 <code>c</code> 的接收行為，而此接收行為必在發送行為完成之前開始，而發送行為又早於 <code>print</code>。</p>
 
-<p><em>唉！</em></p>
+<p>如果使用帶緩衝的 channel（意即宣告 <code>c = make(chan int, 1)</code>），則本例無法保證可以正確印出「<code>哈囉，世界</code>」。（它可能頂多印出空字串；它不會印出「<code>再見，宇宙</code>」或是讓程式崩潰。）</p>
 
-<p>有人對於「幫忙解決電腦問題」這種腳色提出不滿，也不是沒有道理的，但也是十分難以得到不知者的諒解。</p>
+<h2>Locks – 同步鎖</h2>
 
-<p>幾年以後，這些問題會不會改變呢？</p>
+<p><code>sync</code> 這個 package 實作了兩種類型的同步鎖，<code>sync.Mutex</code> 與 <code>sync.RWMutex</code>。</p>
+
+<p>對於任一 <code>sync.Mutex</code> 或 <code>sync.RWMutex</code> 變數 <code>l</code>，且 n &lt; m，則第 n 次叫用 <code>l.Unlock()</code> 必在第 m 次的 <code>l.Lock()</code> 返回之前發生。</p>
+
+<p>參考以下程式碼：</p>
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="k">var</span> <span class="n">l</span> <span class="n">sync</span><span class="p">.</span><span class="n">Mutex</span>
+</span><span class='line'><span class="k">var</span> <span class="n">a</span> <span class="nb">string</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">func</span> <span class="n">f</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">a</span> <span class="p">=</span> <span class="s">&quot;哈囉，世界&quot;</span>
+</span><span class='line'>  <span class="n">l</span><span class="p">.</span><span class="n">Unlock</span><span class="p">()</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">func</span> <span class="n">main</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">l</span><span class="p">.</span><span class="n">Lock</span><span class="p">()</span>
+</span><span class='line'>  <span class="k">go</span> <span class="n">f</span><span class="p">()</span>
+</span><span class='line'>  <span class="n">l</span><span class="p">.</span><span class="n">Lock</span><span class="p">()</span>
+</span><span class='line'>  <span class="n">print</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>此程式可保證印出「<code>哈囉，世界</code>」。第一次呼叫 <code>l.Unlock()</code>（位於 f 內）必在第二次 <code>l.Lock()</code>（位於 <code>main</code>）返回之前，意即於 <code>print</code> 之前呼叫。</p>
+
+<p>對於任何 <code>sync.RWMutex</code> 變數 <code>l</code>，若在第 n 次呼叫 <code>l.Unlock</code> 之後調用 <code>l.RLock</code>，則其相應的 <code>l.RUnlock</code> 必發生於第 n+1 次呼叫 <code>l.Lock</code> 之前。</p>
+
+<h2>Once – 單次執行</h2>
+
+<p><code>sync</code> package 保證多 goroutine 間的得以安全地進行初始化，提供一個變數型態 <code>Once</code> 以控制之。針對特定函式 <code>f</code>，多個執行緒可以同時調用 <code>once.Do(f)</code> 試圖執行之，但 <code>f()</code> 只會被實際執行一次，且在被實際執行的 <code>f()</code> 返回前，其它的 <code>once.Do(f)</code> 調用者都會被鎖住。</p>
+
+<p>利用 <code>once.Do(f)</code> 呼叫的 <code>f()</code> 必在任何 <code>once.Do(f)</code> 返回前單次執行並返回。</p>
+
+<p>參考以下程式碼：</p>
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="k">var</span> <span class="n">a</span> <span class="nb">string</span>
+</span><span class='line'><span class="k">var</span> <span class="n">once</span> <span class="n">sync</span><span class="p">.</span><span class="n">Once</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">func</span> <span class="n">setup</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">a</span> <span class="p">=</span> <span class="s">&quot;哈囉，世界&quot;</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">func</span> <span class="n">doprint</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">once</span><span class="p">.</span><span class="n">Do</span><span class="p">(</span><span class="n">setup</span><span class="p">)</span>
+</span><span class='line'>  <span class="n">print</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">func</span> <span class="n">twoprint</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="k">go</span> <span class="n">doprint</span><span class="p">()</span>
+</span><span class='line'>  <span class="k">go</span> <span class="n">doprint</span><span class="p">()</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>呼叫 <code>twoprint</code> 會印出兩次「<code>哈囉，世界</code>」。只有第一次呼叫 <code>twoprint</code> 會執行 <code>setup</code>。</p>
+
+<h2>Incorrect synchronization – 錯誤的同步方式</h2>
+
+<p>注意，如果讀取事件 r 和寫入事件 w 同時發生，r 或許能夠讀取 w 寫入的值；即便如此，這項事實並不意味著在 r 之後的讀取事件可以讀到 w 之前發生的寫入事件的值。</p>
+
+<p>參考以下程式碼：</p>
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="k">var</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span> <span class="nb">int</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">func</span> <span class="n">f</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">a</span> <span class="p">=</span> <span class="mi">1</span>
+</span><span class='line'>  <span class="n">b</span> <span class="p">=</span> <span class="mi">2</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">func</span> <span class="n">g</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">print</span><span class="p">(</span><span class="n">b</span><span class="p">)</span>
+</span><span class='line'>  <span class="n">print</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">func</span> <span class="n">main</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="k">go</span> <span class="n">f</span><span class="p">()</span>
+</span><span class='line'>  <span class="n">g</span><span class="p">()</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>此例中的 <code>g</code> 有可能先印出 <code>2</code> 再印出 <code>0</code>。（譯註：參考<a href="#happens_before">《Happens Before》一節</a>，「如果表現的行為不變，編譯器和處理器得以任意排列同一 goroutine 內的所有記憶體讀／寫順序」，所以函式 <code>f</code> 可能被重排成 <code>b = 2; a = 1</code>）</p>
+
+<p>這個特性會使得一些過去常用的同步做法失效。</p>
+
+<p>二次檢查鎖過去被用來迴避同步所造成的系統負擔。舉例來說，前例的 <code>twoprint</code> 函式可能被錯誤地寫成：</p>
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="k">var</span> <span class="n">a</span> <span class="nb">string</span>
+</span><span class='line'><span class="k">var</span> <span class="n">done</span> <span class="n">bool</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">func</span> <span class="n">setup</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">a</span> <span class="p">=</span> <span class="s">&quot;哈囉，世界&quot;</span>
+</span><span class='line'>  <span class="n">done</span> <span class="p">=</span> <span class="n">true</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">func</span> <span class="n">doprint</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="k">if</span> <span class="p">!</span><span class="n">done</span> <span class="p">{</span>
+</span><span class='line'>      <span class="n">once</span><span class="p">.</span><span class="n">Do</span><span class="p">(</span><span class="n">setup</span><span class="p">)</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>  <span class="n">print</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">func</span> <span class="n">twoprint</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="k">go</span> <span class="n">doprint</span><span class="p">()</span>
+</span><span class='line'>  <span class="k">go</span> <span class="n">doprint</span><span class="p">()</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>但是這樣的同步機制現在無效了。理想上，在 <code>doprint</code> 裡，籍由觀測 <code>done</code> 是否被寫入值意味著 <code>a</code> 是否完成寫入；實際上，「<code>哈囉，世界</code>」可能不被印出，取而代之的是空字串。</p>
+
+<p>另外一個過去常用的同步手段是忙碌鎖，像是這樣：</p>
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="k">var</span> <span class="n">a</span> <span class="nb">string</span>
+</span><span class='line'><span class="k">var</span> <span class="n">done</span> <span class="n">bool</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">func</span> <span class="n">setup</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">a</span> <span class="p">=</span> <span class="s">&quot;哈囉，世界&quot;</span>
+</span><span class='line'>  <span class="n">done</span> <span class="p">=</span> <span class="n">true</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">func</span> <span class="n">main</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="k">go</span> <span class="n">setup</span><span class="p">()</span>
+</span><span class='line'>  <span class="k">for</span> <span class="p">!</span><span class="n">done</span> <span class="p">{</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>  <span class="n">print</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>一如前例，在 <code>main</code> 中觀查 <code>done</code> 是否被寫入，無法保證 <code>a</code> 是否被賦值，所以同理可能印出空字串。更糟的是，因為在兩個執行緒之間並沒有明確的同步事件，所以就連 <code>done</code> 的寫入事件也無法保證能被 <code>main</code> 所觀察，因此有機會在 <code>main</code> 造成無窮迴圈。</p>
+
+<p>在此還有個微妙的變種，參見以下程式：</p>
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="k">type</span> <span class="n">T</span> <span class="k">struct</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">msg</span> <span class="nb">string</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">var</span> <span class="n">g</span> <span class="p">*</span><span class="n">T</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">func</span> <span class="n">setup</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">t</span> <span class="p">:=</span> <span class="nb">new</span><span class="p">(</span><span class="n">T</span><span class="p">)</span>
+</span><span class='line'>  <span class="n">t</span><span class="p">.</span><span class="n">msg</span> <span class="p">=</span> <span class="s">&quot;哈囉，世界&quot;</span>
+</span><span class='line'>  <span class="n">g</span> <span class="p">=</span> <span class="n">t</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">func</span> <span class="n">main</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="k">go</span> <span class="n">setup</span><span class="p">()</span>
+</span><span class='line'>  <span class="k">for</span> <span class="n">g</span> <span class="p">==</span> <span class="n">nil</span> <span class="p">{</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>  <span class="n">print</span><span class="p">(</span><span class="n">g</span><span class="p">.</span><span class="n">msg</span><span class="p">)</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>即便 <code>main</code> 觀察到 <code>g != nil</code> 發生而決定是否離開迴圈，<code>g.msg</code> 也不一定已經完成它的初始化。（譯註：因為 <code>setup</code> 可能被重排成 <code>g = new(T); g.msg = "哈囉，世界"</code>，因此 <code>g != nil</code> 時 <code>g.msg</code> 可能尚未被賦值。）</p>
+
+<p>綜觀以上數例，其解決方案始終如一：以明確的方式進行同步。</p>
 ]]></content>
   </entry>
   
   <entry>
-    <title type="html"><![CDATA[日記：931112]]></title>
-    <link href="http://COLDTURNIP.github.com/blog/2004/11/12/diary-041112/"/>
-    <updated>2004-11-12T17:57:00+08:00</updated>
-    <id>http://COLDTURNIP.github.com/blog/2004/11/12/diary-041112</id>
-    <content type="html"><![CDATA[<p>今天一整個被考試充滿 :)</p>
+    <title type="html"><![CDATA[Go snippets for VIM]]></title>
+    <link href="http://COLDTURNIP.github.com/blog/2010/11/27/go-snippets-for-vim/"/>
+    <updated>2010-11-27T22:39:00+08:00</updated>
+    <id>http://COLDTURNIP.github.com/blog/2010/11/27/go-snippets-for-vim</id>
+    <content type="html"><![CDATA[<p>好久好久沒有貼東西了。</p>
 
-<p>早上一二節考軍訓，剛好考到我最喜歡的二戰太平洋海戰 (Z 作戰)；基本上二戰太平洋戰場被我摸得一清二楚，要寫多爽就寫多爽 :D</p>
+<p>這幾天試用了 yoco 推薦的 NeoComplCache，
+真的很強大，所以我把 snipMate 和 superTab 移除了。
+剛好這週有莫名強烈的欲望想和 Go 混得更熟，
+所以就依著 language spec 做了一份 go.snip</p>
 
-<p>玩歷史遊戲總是有好處的。以前玩太閤立志傳、信長之野望系列很迷，對於日本近代史和地理結構民族風情政治也是從這段戰國時期開始；然後又玩了提督之決斷，對於二戰海戰結構、發展和日方興衰也研究了一番。</p>
+<p>go.snip 在此，</p>
 
-<p>想起更早前，第一個接觸的電腦遊戲，三國志二英文版。當然小學生不懂英文啦~ 全靠著父親翻譯之後背選項編號來統一中國的。那段時間也研究了一點三國史。</p>
+<div><script src='https://gist.github.com/1342966.js?file='></script>
+<noscript><pre><code>snippet if
+abbr    if () {}
+    if ${1:condition} {
+        ${0:/* code */}
+    }
 
-<p>小學四年級玩的是蒼狼與白鹿 (成吉思漢一)，順便翻了一下元朝領土擴張戰爭和當時的亞洲政治體系。</p>
+snippet else
+    else {
+        ${0:/* code */}
+    }
 
-<p>當然，這些歷史都是看好玩的，只記得大略；要我說出幾年發生什麼事情，我可記不得。</p>
+snippet elseif
+    else if ${1:condition} {
+        ${0:/* code */}
+    }
 
-<p>稍微回顧一下，清一色日本 Koei 光榮堂出品 XD，那就來統計一下玩過的遊戲：</p>
+snippet ifelse
+abbr    if cond {} else {}
+    if ${1:condition} {
+        ${2:/* code */}
+    } else {
+        ${0:/* code */}
+    }
+
+snippet for
+abbr    for cond {}
+    for ${1:condition} {
+        ${0:/* code */}
+    }
+
+snippet forcount
+abbr    for init; cond; post {}
+    for ${1:i} := ${2:init}; ${3:condition}; ${4:$1++} {
+        ${0:/* code */}
+    }
+
+snippet forrange
+abbr    for itr := range itabl {}
+    for ${1:iterator} := range ${2:iterable} {
+        ${0:/* code */}
+    }
+
+snippet switch
+abbr    switch expr {case match: ...}
+    switch ${1} {
+    case ${2:matchCase}:
+        ${0:/* code */}
+    }
+
+snippet switchCond
+abbr    switch {case cond: ...}
+    switch {
+    case ${1:condition}:
+        ${0:/* code */}
+    }
+
+snippet select
+abbr    select {case chanComm: ...}
+    select {
+    case ${1:channelCommunication}:
+        ${0:/* code */}
+    }
+
+snippet func
+abbr    func name(arg) ret {}
+    func ${1:funcName}(${2:argList}) ${3:returnList} {
+        ${0:/* code */}
+    }
+
+snippet funcmethod
+abbr    func (T) name(arg) ret {}
+    func (${1:receiver}) ${2:funcName}(${3:argList}) ${4:returnList} {
+        ${0:/* code */}
+    }
+
+snippet lambda
+abbr    func(${1:argList}) ${2:returnList} {${3:/* code */}}()${0}
+
+snippet make
+abbr    make(T)
+    make(${1})${0}
+
+snippet makesillen
+abbr    make([]T, len)
+    make([]${1:baseType}, ${2:length})${0}
+
+snippet makesilcap
+abbr    make([]T, len, cap)
+    make([]${1:baseType}, ${2:length}, ${3:capacity})${0}
+
+snippet makemap
+abbr    make(map[keyT]valT)
+    make(map[${1:keyType}] ${2:valType})${0}
+
+snippet makemapcap
+abbr    make(map[keyT]valT, cap)
+    make(map[${1:keyType}]${2:valType}, ${3:capacity})${0}
+
+snippet makechan
+abbr    make(chan T)
+    make(chan ${1:type})${0}
+
+snippet makechanbuf
+abbr    make(chan T, bufferSize)
+    make(chan ${1:type}, ${2:bufferSize})${0}
+
+snippet append
+abbr    append(dest, src...)
+    append(${1:dest}, ${2:src})${0}
+
+snippet copy
+abbr    copy(dest, src)
+    copy(${1:dest}, ${2:src})${0}
+
+snippet struct
+abbr    struct {}
+    struct {
+        ${0:/* data */}
+    }
+
+
+snippet interface
+abbr    interface {}
+    interface {${1:/* method */}}${0}
+
+snippet constlist
+abbr    const ()
+    const {
+        ${0}
+    }
+
+snippet constenum
+abbr    const (enumerators)
+    const (
+        ${1:firstValue} = ${2:/*iota expr*/}
+        ${0}
+    )
+
+snippet var
+    var ${1:variable} ${0:type}
+
+snippet varlist
+abbr    var (vars)
+    var (
+        ${0}
+    }
+
+# main function
+snippet main
+    func main() {
+        ${0:/* code */}
+    }
+
+# package initialize function
+snippet init
+    func init() {
+        ${0:/* code */}
+    }
+
+# import packages
+snippet import
+abbr    import &quot;pkg&quot;
+    import &quot;${1:package}&quot;${0}
+
+snippet importalias
+abbr    import &quot;pkg&quot;
+    import ${1:alias} &quot;${2:package}&quot;${0}
+
+snippet importlist
+abbr    import ()
+    import (
+        ${1:spec} &quot;${2:package}&quot;${0}
+    )
+
+# package name
+snippet package
+    package ${0:name}
+
+# Typedef
+snippet type
+abbr    type customType baseType
+    type ${1:customType} ${0:baseType}
+
+snippet typelist
+abbr    type ()
+    type (
+        ${1:customType} ${0:baseType}
+    )
+
+
+# Typedef struct
+snippet typestruct
+alias   structtype
+    type ${1:name} struct {
+        ${0:/* data */}
+    }
+
+# Typedef interface
+snippet typeinterface
+alias   interfacetype
+    type ${1:name} interface {
+        ${0:/* method */}
+    }
+
+snippet Printf
+    fmt.Printf(&quot;${1}\n&quot;${2})${0}
+
+snippet Println
+    fmt.Println(${1})${0}
+
+snippet Fprintf
+    fmt.Fprintf(${1:os.Stderr}, &quot;${2}\n&quot;${3})
+    ${0}
+
+snippet Fprintln
+    fmt.Fprintln(${1:os.Stderr}, ${2})
+    ${0}
+
+snippet panic
+    panic(${1:throwable})${0}
+
+snippet recover
+    recover()${0}
+
+snippet comment
+alias /*
+    /* ${1:comment} */
+    ${0}</code></pre></noscript></div>
+
+
+<p>請置於 .vim/autoload/neocomplcache/sources/snippets_complete/</p>
+
+<p>而完整的 plugin fork <a href="https://github.com/COLDTURNIP/neocomplcache">在此</a>。</p>
+
+<p>Go 很好玩，快來寫 Go！</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[《竹取物語》略譯]]></title>
+    <link href="http://COLDTURNIP.github.com/blog/2009/11/15/the-tale-of-the-bamboo-cutter/"/>
+    <updated>2009-11-15T22:12:00+08:00</updated>
+    <id>http://COLDTURNIP.github.com/blog/2009/11/15/the-tale-of-the-bamboo-cutter</id>
+    <content type="html"><![CDATA[<h1>竹取公主</h1>
+
+<p>以前有個老公公和老婆婆相依為命。這個叫「讚岐造麿（<a href="#1">註一</a>）」的老公公每天上山砍竹子，老婆婆（<a href="#2">註二</a>）整天在家等老公公回家吃飯。</p>
+
+<p>有一天老公發現一枝光華異常的竹子，砍開一看，乖乖不得了，竹子裡面竟然有個女娃。當然，他把女娃帶回家養。結果往後的日子都改變了；首先是老公公每天上山砍的竹子都會發現竹子裡面有真的黃金，很重不臭又會反光的那一種，讓這對老夫妻的生活馬上進入富豪之列；然後是這個女娃成長的速度非凡，才三個月就變成了一個端莊秀麗、皓齒明眸、羞花閉月、國色天香的大美人，神奇地讓老夫妻的屋子充滿光芒（<a href="#3">註三</a>），讓全國上下的男姓為之瘋狂。也因為她的來到照亮了這個家，所以人們給了這個女孩一個名字，叫作「輝夜」。</p>
+
+<h1>五大難題</h1>
+
+<p>每天都有人處心機慮想要一睹輝夜的丰采，有人偷挖地洞、有人每天在牆外吟詩奏笛、有人找了媒人想找老公公提親。當然最後都被回絕。最後有五個人，不是富商就是王宮貴族，他們天天想和輝夜親近。</p>
+
+<p>這時候老公公就撐不下去了。他跟輝夜說：「雖然妳不是我的親生女兒，但是我還是想勸勸妳。人家說男大當婚、女大當嫁，每天都有人上門找楂也是讓我很擔心的，何不在這五個人之中找一個可靠的人嫁了呢？」</p>
+
+<p>輝夜最後還是說不過去，就說了：「好吧，那麼我給他們一人一個難題，誰能解出來我就嫁給誰吧。」過了幾天老翁就把那五個人找來了。</p>
+
+<p>首先是給石作皇子的題目：「在天竺，有個佛祖生前使用的石缽，去把這個東西找來。」</p>
+
+<p>再來是給車持皇子的題目：「東方海上傳說有蓬萊之山，那邊每棵樹都以玉為枝、寶石為實，去折一枝仙枝回來。」</p>
+
+<p>然後是給阿部右大臣的題目：「唐國有件燒不壞的火鼠之裘，去把這拿來。」</p>
+
+<p>給大伴大納言的題目是：「龍的頸子有五色輝玉，把玉拿一顆回來。」</p>
+
+<p>最後是石上中納言的題目：「燕子的巢裡有個叫子安貝的罕見寶貝，去找一個回來。」</p>
+
+<p>當然這些題目光是看了就讓人傻眼，這些有錢人當然有苦說不出，但是又想和大正妹在一起，所以都各自回去想辦法了。</p>
+
+<h2>難題一–佛御石缽</h2>
+
+<p>首先是石作皇子。這個人為人聰敏，他想說天竺雖然是有辦法到達的，但是佛御石缽總是個獨一無二的寶貝，就算到了天竺也不可能找得到。於是，才沒過幾天，他就向輝夜一家告別，說要出發找佛御石缽；但是沒有真的去找，他和僕人跑到某個地方度假去了，一度就是度三年，最後跑到大和國這個地方（大概在近畿到堺的中間）的某座山上的寺廟去，把十八羅漢其中一個的被燻黑的石缽拿來，在裡面放了一個錦袋，錦袋裝了一首詩，唬爛說自己這三年過得如何艱困。這個輝夜也不是個花瓶，一看就知道這是個假貨，就把這個缽丟在門前，然後把人家的帳號給封鎖了。所以日本對於無恥的行為有個說法叫「扔缽」，典故就是這樣。</p>
+
+<h2>難題二–蓬萊仙枝</h2>
+
+<p>再來是車持皇子（<a href="#4">註四</a>）。這個人比石作皇子更有心機，他對外界說要到築紫國（<a href="#5">註五</a>）去治病，又向輝夜家的僕奴說要出海去找玉枝，然後只帶了貼身隨從就從難波港出海去了。結果他只出了三天海，回來就跑到某個地方龜起來，找了當時最好的幾個工匠，買了美玉珠寶做了一條仙枝。等到完工以後，他又偷偷回到難波港，假裝疲憊地從海上回來，把成品拿去給輝夜看。</p>
+
+<p>輝夜看到這個千真萬確的「真品」後心想：「難道我真的要輸給這個宅男了嗎？」老翁覺得皇子看起來相貌非凡，也覺得輝夜應該嫁給人家了。正當車持皇子歡樂地為了新婚而建造新宅的時候，有六個工匠跑去輝夜家，要人家付帳。老翁和輝夜當然覺得很怪，於是工匠們就說了原因──原來是這個皇子請工匠們做的偽物，然後又老馬忘了給人家錢。相當然爾，輝夜同情工匠，幫皇子付了錢，然後就叫這個車持皇子滾蛋了。這些工匠也實在夠衰，沒過幾天就被皇子派來的人打了一頓，錢也被搶走了。後來皇子自己也覺得自己很可恥，最後就自己失蹤了。所以有人稱這種行為叫「離魂」。</p>
+
+<h2>難題三–火鼠之裘</h2>
+
+<p>再來是右大臣阿部御主人，他家很有錢。他找了一個他覺得可信任的僕人，寫了封信給負責與中國貿易的貴族，叫僕人交涉看看買不買得到這個火鼠之裘。僕人去了一趟中國回來，說這個東西並沒有出現在中國，是天竺的東西；又說有個從天竺回來的高僧，曾把一件這個寶貝放在某個寺廟裡面。因為這個寶貝舉世無雙，所以先前帶去的錢全部只能當訂金用掉了，好不容易才拿回來，還欠了人家一大筆錢。</p>
+
+<p>這個滿腦子正妹的阿部御主人，看到任務達成了當然很高興，一方面請人去還了錢，一方面買了一個珠光寶氣的寶箱、裝了裘去給輝夜看。輝夜說這個寶貝既然是真品，那應該試看看是不是真的燒不爛，老翁也是這麼覺得，阿部御主人也是這麼覺得，結果就真的燒了它，結果它就真的不負輝夜大小姐的期望變成一堆灰給大家看。輝夜笑了、老翁失望了、阿部御主人臉綠掉了。最後這個輝夜還很過份地寫了一首詩給人家看。後來的人都說這種被人家 hame 不能順利達成的事情叫「阿部主人」。</p>
+
+<h2>難題四–龍頸之玉</h2>
+
+<p>第四個是大伴大納言。他把家裡所有的絲絹、錦緞和黃金都拿出來，分送給僕人們，跟他們說：「這些給你們去當旅費，你們去海上把龍頸之玉拿回來。拿回來的話什麼都給你們，沒有拿到的話你們也別想回來。」結果僕人都懶洋洋地出門了，想當然爾就不打算回去了（我們拿著財物拼死去找龍 CP，然後掉寶還要拿回來給你去把妹，搞屁啊！）。大納言又想說這個輝夜應該受到尊爵不凡的待遇，就蓋了一棟豪宅，上面嵌上各種不同的陶瓷、彩漆，屋頂鋪上一條一條的絲綢，然後把自己的妻妾全部趕走。</p>
+
+<p>過了好一陣子，豪宅也完工了，就是沒聽見僕人們的消息，去問海港工作的人們也沒有聽過類似的消息。他想：「這群人太沒出息了。」於是就自己雇了一艘船，在海上漫無目的的到處航行，不知不覺來到了九洲；突然來個大風暴，海浪猛烈地拍打船身，天上不停打著暴雷。船戶們哭著向大納言說，自己行船多年也沒遇過這麼不吉利的事情；大納言當然不聽，還說了瞧不起人的話，過沒多久自己就吐出了奇怪的酸水。最後不得以，全船的人都開始祈求上天原諒，沒多久就風平浪靜了。找不到龍，又遇到這麼不吉的天象，大納言只好下令回航，一上岸就得了怪病，肚子脹得半天高，眼睛也快要凸出來了，只好請衙門的人用轎子送他回家。沒想到之前跑掉的僕人全都回來了，跟他說：「主人你總算也知道這鬼玩意不可能拿得到了。」大納言不得不同意：「龍這種東西跟神是同等級的，要去殺龍拿東西，被殺是當然的，這一切一定是輝夜這個臭女人的詭計。」於是把家裡剩下的財寶都賜給僕人們。他的前妻們聽到了這個結果都笑破了肚皮，新造房子屋頂的彩帶最後也被烏鴉拿去築巢了。</p>
+
+<h2>難題五–燕之子安貝</h2>
+
+<p>最後是中納言石上麻呂。他叫家裡的人在燕子築巢的時候通知他，為了要拿子安貝；其中有個僕人提議，直接架個架子，找幾個壯漢爬上去把燕子打死拿寶。但真正在實作上馬上就遇到麻煩，壯漢一爬上去，燕子就嚇得跑先了。最後一個廚師提議說：做一個定滑輪，其中一邊綁一個籃子，籃子裡坐一個人，等燕子回巢的時候籃子升上去，直接伸手拿子安貝。真的讓他們等到了築巢的時刻，但僕人說他伸手摸來摸去就是沒有什麼子安貝。中納言原本想找另一個人上去，想來想去最後還是自己出馬。籃子升上去，手一探，「噫！好了！我中了！」連忙叫僕人放他下去，沒想到大家一急，老馬跌進一格洞，中納言從上面著實摔了下來，兩眼翻白，過了好一陣子才醒過來；手一打開發現哪有什麼子安貝，是塊發硬的鳥糞。鳥糞怎麼拿出去獻寶呢？摔下之後，中納言身體越來越弱，最後死在病床上。</p>
+
+<p>輝夜聽到這個消息，深感抱歉，還是寫了一封信去慰問人家。從此以後，大家都說做事情沒有結果叫「沒有貝」。</p>
+
+<h1>天皇</h1>
+
+<p>五道難題沒人解開，最後連天皇都想一見輝夜的美貌。老翁接到了聖旨，問輝夜要不要進宮，輝夜當然不同意；沒過多久，老翁被叫進宮裡去，被聖上問說為什麼大膽不准輝夜進宮，老翁據實以報，天皇只好請老翁再回去說說看，說動的話就封老翁五品官。老翁回家跟輝夜說：「皇上待我如此，妳還要挑嗎？」輝夜也是個牛脾氣：「這算什麼！無論如何，我寧願找死也不要去當宮女！」「等等，就算是讓我得到官位，也不能教我心愛的女兒去死；但是妳為什麼就是不肯進宮呢？」「過去那麼多人的努力，尚且都沒有答應了；皇上是昨天才加入戰局的呢！如果我答應了，那才是真正可恥的事情。」</p>
+
+<p>隔天老翁就回去據實報告了。天皇沒軋，只好跟老翁密謀，籍口找了一天到老翁打附近田獵，然後冒然進了老翁家。天皇在混亂中拉住了輝夜的袖子，想把她拉進轎子裡，但是輝夜突然就消失了！天皇只好說：「好吧，果然不負虛名，妳果然不是一位普通的女子。我不逼妳了，妳就現出原形，讓我見見妳，我就回去了。」</p>
+
+<p>事後，天皇還是設了宴席褒獎了老翁，讓他見到了輝夜的美貌；但是見到了便更難以忘記了，這個天皇幾乎每天晚上閉上眼睛都是輝夜的倩影。得不到她的心又沒辦法忘記，只好常常寄信給輝夜；而輝夜好歹也是個知書達禮的人，就這樣和天皇通了三年的信。</p>
+
+<h1>竹取飛翔</h1>
+
+<p>某個七月十五滿月的夜晚，老翁無意間看到輝夜一個人看著天上的滿月發呆嘆氣；又過了一個月，同樣也是滿月的夜晚，輝夜望著滿月大哭。老公公和老婆婆嚇壞了，連忙問發生了什麼事，輝夜便說了：其實她是月之國的公主，因為犯了某個錯誤，所以到地面上來服刑；現在役期要滿了，月之國要派使者來接她。老公公聽了之後，不免感傷，說：「當初把妳從竹林裡找到，現在長得亭亭玉立，卻有人要來接妳回去了，這是斷然不可以的；我沒有兒女，如果真的要這樣的話，那我不如死了算了。」輝夜連忙勸阻：「我本來就是月之國的人，那裡還是有我真正的父母，雖然我在此並不想念；回到月之國，我一點也不會高興，但是這還是無可奈何的事情。」最後全家人，包括女僕們，好幾天為了這個消息都吃不下飯。</p>
+
+<p>最後連皇上都知道了這件事。月之使者來的當天，竹取翁家裡由內而外都佈了御林軍，一見到飛行物體就放箭；老婆婆抱著輝夜，躲在上了鎖的籠子裡面。但是時辰一到，夜晚的天空突然比白晝還亮，御林軍的箭不知道為什麼就是射不中任何東西，而老婆婆和輝夜的籠子也不知道為什麼自動打開了。這時，只見天空降下了五個人和一台車，其中一個貌似大將的人喚了：「造麿，出來」老翁渾身不對勁，只能像喝醉了一樣地爬出來。月之使者說了：「愚蠢的人們！之前看你們略有功德，就讓輝夜降生在這裡，你們的境遇不是大為改善了嗎！輝夜之後犯了罪，所以讓她寄身在這個下賤的地方，現在她的罪消除了，我們來接她回去，你並不需要為此悲傷。」</p>
+
+<p>老翁還是不死心：「現在還不是時候，輝夜姬現在患了重病，還不能出門。」</p>
+
+<p>使者沒有理他：「輝夜啊！沒有必要再住在這種污穢的地方了。」</p>
+
+<p>輝夜走上前去安慰老翁：「如果我是地上人，我一定會侍奉你們到終老；只可惜我不是，所以我還是得回到月亮上。現在我捨棄了你們回到月亮，就像當時離開月亮的心情一樣沉重。」</p>
+
+<p>使者拿了一件羽衣和一瓶藥給輝夜，輝夜只吃了一點，想把藥和衣服送給老翁，被使者阻止。最後輝夜只好寫了一封信給天皇，對於不能答應天皇的事情感到抱歉，託人把藥和信拿給天皇後，穿上羽衣，上了車，不一回就和使者們一起在天空消失了。</p>
+
+<p>老公公和老婆婆從那天之後悲傷成疾，沒過多久就去逝了。御林軍沒有達成任務，出師不利，回朝據實以報，並把信件和不死之藥奉上。天皇也感到不捨，覺得沒有輝夜的不死之藥是沒有意義的，所以命一個叫「調岩笠」的人，帶著不死之藥投入駿河國中最高、最接近月亮的山頂上銷毀。後來銷毀藥物的煙到現在還冒著，這座山被人叫作不死之山，也就是富士山。</p>
+
+<h1>譯註</h1>
 
 <ul>
-<li>三國志：2, 3, 4, 5, 6, 8, 9, 10</li>
-<li>太閤立志傳：1, 2, 3</li>
-<li>成吉斯漢：1</li>
-<li>信長之野望：7, 8, 10</li>
-<li>提督之決斷：2, 3, 4</li>
-<li>英傑傳系列：1</li>
-<li>合計 19 部作品 @_@</li>
+<li><a name="1"></a>註一：請別問我老公公的名字跟讚岐拉麵的關係。</li>
+<li><a name="2"></a>註二：老婆婆的名字請洽竹取物語作者，可惜已經不可考了。</li>
+<li><a name="3"></a>註三：真好，砍竹子可以砍到正妹，以後大家除了在路邊踢機車以外還多了這種選擇。</li>
+<li><a name="4"></a>註四：車持皇子，按照推測，就是東方永夜抄 Ex Boss 藤原妹紅她父親。</li>
+<li><a name="5"></a>註五：築紫國大約位於現在的九州。</li>
 </ul>
 
 
-<p>好啦，離題，這些東西以後討論…</p>
+<h1>關聯閱讀</h1>
 
-<p>下午第一二節考 Linux，真是考得很心酸，我用 bash 在學他用 tcsh 在考，環境變數根本不一樣，指令下法也不同，真是去當炮灰的…</p>
+<p>本翻譯乃是參考<a href="http://miko.org/~uraki/kuon/">久遠之絆</a>的《<a href="http://miko.org/~uraki/kuon/furu/text/monogatari/taketori/taketori00.htm">私譯竹取物語</a>》、而後改寫的二次白話翻譯。如果對於竹取物語的故事感到興趣，不妨一讀上述文言版本。</p>
 
-<p>十題只答出四題；老師說這次大家考很糟，要出第二次期中考彌補 Q_Q</p>
-
-<p>好吧，我承認我在 Perl 的參數呼叫方法部分沒有抄到…真是漏網之魚，偏偏這東西考一堆。</p>
-
-<p>原本考到三點半的，三點衝去考歷史。多謝潤易小夫關心，可能是怕我忘記去考試吧！還打電話催我去考試 (不過我剛好在上廁所不方便接 XD)。</p>
-
-<p>歷史只考五題，五小題的名詞簡答加四小題的有答案申論，寫到手快抽筋了；東西沒有被得很熟。</p>
-
-<p>台灣史真是很難讓我提起興趣。可能是我讀歷史習慣了從遊戲得到興趣吧！不排斥世界史也是因為世紀帝國系列的緣故…</p>
-
-<p>我的史觀真是被這些東西深深影響。只有中國古代史例外，是純粹是因為對於中華文化的民族主義和文化驕傲而吸引。</p>
-
-<p>這樣說起來，我還算是自動自發的文人嗎？呵呵，說自己是文人真是太高估自己了吧！</p>
-
-<p>晚上終於開始 FreeBSD 的攻略。前期安裝到基本設定，看起來都跟 Linux 十分相似，所以適應時間十分短暫就可以跟它稍微溝通；唯一令我感到意外的，就是 FreeBSD 的預設 Shell 居然就是中午以我的分數為大餐的 tcsh 系列！！</p>
-
-<p>看來我勢必得把習慣從鳥哥的 bash 改成 tcsh 囉~</p>
-
-<p>這個作業系統目前給我的感覺，好像很古老、很沉穩…與 Linux 那種活潑跳動的感覺不大相同。 (Windows？我現在知道那不叫健談可人，那叫做壓迫症歇斯底里 XD)</p>
-
-<p>仍然有浩瀚無盡的領域需要去觸摸、需要去摸索啊…</p>
+<p>另外，有一本中國民間故事合輯《金玉鳳凰》，該書記載大陸西南地區流傳著各種傳說，其中一篇《斑竹姑娘》的故事與《竹取物語》異常相符，也待有興趣者自行比較之。</p>
 ]]></content>
   </entry>
   
   <entry>
-    <title type="html"><![CDATA[日記：041104]]></title>
-    <link href="http://COLDTURNIP.github.com/blog/2004/11/04/diary-041104/"/>
-    <updated>2004-11-04T17:27:00+08:00</updated>
-    <id>http://COLDTURNIP.github.com/blog/2004/11/04/diary-041104</id>
-    <content type="html"><![CDATA[<p>今天應該上的課很多都翹了…</p>
+    <title type="html"><![CDATA[高中時期的文學創作]]></title>
+    <link href="http://COLDTURNIP.github.com/blog/2009/11/15/literature-and-my-classmates-in-high-school/"/>
+    <updated>2009-11-15T22:09:00+08:00</updated>
+    <id>http://COLDTURNIP.github.com/blog/2009/11/15/literature-and-my-classmates-in-high-school</id>
+    <content type="html"><![CDATA[<p>以前高中時候，我們這一群人大概也因為老師的關係，偶爾也會想自己創作一些東西貼在板上，雅文共賞。</p>
 
-<p>早上八點半，鬧鐘叫了人也醒了；而一來賴床二來有人勸我別去 (也才一堂課而已，蘿蔔你就別去了吧…反正你去了也是睡覺。)，想想也有道理，乾脆翻身繼續睡，睡睡平安。</p>
+<p>高二那年的十一月暮秋，大概是因為課業不順利，身為國文小老師的渣震這樣寫道：</p>
 
-<p>午時醒來，想說再睡半小時，睡到上課前起床；結果跟姬大人一下棋又忘了時間，再次醒來時間十五點，驚醒，跑去上科學哲學。</p>
+<blockquote><p>無端怎興悲
+萬物無可遊
+莫名話惆悵
+天涼好個秋</p></blockquote>
 
-<p>昨晚違規停車，腳踏車被鎖在電機館。這是我自成為中大學生以來第一次走路到科四館上課，真不是普通程度遠的！以前騎車都沒啥感覺，大概也因為百花川剛好順向斜坡吧~</p>
+<p>我就這樣回了：</p>
 
-<p>今天也開了 SNMG 第一次 Meeting，感覺雅雅學長沒有我想像中的嚴肅；今天也沒討論什麼，主要時間都是在整理廢棄電腦零件 + 挖寶，挖到了各種東西…</p>
+<blockquote><p>悲興不可端
+愁來莫名由
+風澀天有時
+天涼未必秋</p></blockquote>
 
-<p>巨型磁片 (絕種於 IBM 80286 時代)、磁帶機大磁帶盤、磁帶、伺服器專用 RAM (一片比現有個人電腦主機板還大)、Intel 80486 CPU ~ Intel Pentium II (好令人懷念的規格 :D)、Slot 1 MB，還有各種時代的 RAM，感覺把 IBM 個人電腦演進史逛了一遍。</p>
+<p>拿破侖帶有一點恢諧意味地加上一篇：</p>
 
-<p>最後搬了好些零件走，我還搬了一箱硬碟，回去慢慢試… (雖然這東西折損率很高，亂槍打鳥多打多中。)</p>
+<blockquote><p>興悲必有端
+想是思春愁
+勸君莫能爾
+天寒已是冬</p></blockquote>
 
-<p>下次 Meeting 要下下週了，到時候要報告舊電腦組裝使用狀況和 FreeBSD 安裝進度，看來有得忙了…</p>
+<p>…現在打死我也寫不出這種東西，以前背的文言文已經忘得差不多了（汗）</p>
 
-<p>然後今天又上網敗了一本博碩文化的「FreeBSD 5.x 架設管理與應用」，為了幾天後更加體驗窮苦大學生經濟情況雪上加霜的感覺 :~</p>
+<p>這些內容原本貼在高中友人的個板上，而該板所處的克萊恩大地 BBS 站現今已隨風而逝，正如我們一去不返的青春年華。</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[前陣子又和未來老闆通了幾封信]]></title>
+    <link href="http://COLDTURNIP.github.com/blog/2009/07/06/a-letter-from-my-boss/"/>
+    <updated>2009-07-06T22:08:00+08:00</updated>
+    <id>http://COLDTURNIP.github.com/blog/2009/07/06/a-letter-from-my-boss</id>
+    <content type="html"><![CDATA[<p>老闆有問了一些新訓的安排，那時候我有回信說因為十二月才進入公司，希望十月初能先到部門實習（雖然其實是違心之論）；今天老闆去人資那邊問了，結果是公司沒有前例可循，所以目前暑假放到十一月中變成是確定的事。</p>
 
-<p>晚上夜之祭慶功宴，免費御岩燒一頓，滿到脖子。回來之後幫佩君小慶生，送了紅龜粿一份，然後大家講笑話~</p>
+<p>（老闆：只要有把之前他寄的自修建議放在心上就夠了，不要給自己太大壓力）</p>
 
-<p>獲得新情報：下週二考工程數學，看來這週末還很刺激…</p>
+<p>雖說本來就有計劃想在最後的長假學些想學的東西，可是這樣一來又太長了，而且最後一個月大概要獨自渡過 orz</p>
 
-<p>今日報告完畢。</p>
+<p>該來做點什麼計劃呢…雖然這樣就算花個一個月去上海轉轉找爸媽也不是不行，但我一點都不想再去那個地方。我想我需要建議（當然，打兩三個月的三國或玩什麼線上遊戲殺時間之類的就免了）。</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Style Guide for C Code]]></title>
+    <link href="http://COLDTURNIP.github.com/blog/2009/05/07/style-guide-for-c-code-from-pep/"/>
+    <updated>2009-05-07T20:57:00+08:00</updated>
+    <id>http://COLDTURNIP.github.com/blog/2009/05/07/style-guide-for-c-code-from-pep</id>
+    <content type="html"><![CDATA[<p>這份文件的原始出處為 Guido van Rossum 所寫的《Style Guide for C Code》，發表於 <a href="http://www.python.org/dev/">Python Developers Guide</a> 的 <a href="http://www.python.org/dev/peps/">Python Enhancement Proposals（PEP）</a>之中，編號為 <a href="http://www.python.org/dev/peps/pep-0007/">PEP 7</a>。</p>
+
+<p>這份文件主要的內容，一如其 Introduction 一章所言，為統一實作 Python 的程式設計師的寫碼風格而著。對於一般的 C/C++ 程式設計師來說，這份文件也有助於提升程式碼的可讀性。</p>
+
+<p>（可惡，天氣太熱，跑數據打電動都會熱當，閒來無事只好來翻這個東西…）</p>
+
+<hr />
+
+<h1>Introduction 簡介</h1>
+
+<p>這份文件設定了一些寫碼慣例，供實作 Python 的設計師們作為參考。在閱讀本文件的同時，請同時參閱 PEP describing style guidelines for Python code <a href="http://www.python.org/dev/peps/pep-0008/">1</a> 一文。</p>
+
+<p>注意，規則存在的意義就在於讓人打破它。至於何時打破這份規則，這邊有兩個不錯的時機：</p>
+
+<ol>
+<li>縱使原始碼的閱讀者亦慣於遵循這份規則，但當遵循規則反而會破壞原始碼的可讀性時，也不要用這份習慣來寫這段程式。</li>
+<li>基於歷史遺毒，假若附近的程式碼都不遵循這份規則，那麼新加入的程式碼也不要遵循它──即使這有可能會是一個修正歷史的契機，也不要。</li>
+</ol>
+
+
+<h1>C dialect C 語言的方言</h1>
+
+<ul>
+<li><p>使用 ANSI/ISO C 的標準（這邊指的是 1989 年的版本，也就是 C89）。此規則意味著，吾人應該在任何程式區段的開頭宣告所有此區段所需之變數（不必一定得在函式的開頭全部宣告完）。
+譯註：這邊指的區段（block）指的是一組大括號（<code>{}</code>）所涵蓋之範圍。</p></li>
+<li><p>不要使用 GCC 的附加功能（例如，以多行撰寫同一字串內容時，直接斷行而不加上反斜線跳脫換行字元）。</p></li>
+<li>所有的函式宣告、定義之前一定要詳細地把前置宣告寫清楚。意即，在前置宣告中，要明確地標明各參數型態。</li>
+<li>不要使用 C++ 的單行註解語法（<code>//</code>）。（譯註：這條規定與 Scott Meyers 所著的 Effective C++ 之建議洽洽相反──該書內容建議使用新式的單行註解，以避免在開發時的某些註解不對稱問題。（Second Edition, Item 4））</li>
+<li>不要太依賴某種主流編譯器的特殊功能（gcc、VC++ 等等）。</li>
+</ul>
+
+
+<h1>Code lay-out 程式碼排版</h1>
+
+<ul>
+<li>如果這份程式碼的前撰寫者已經選用 tab 作為縮排字元，那麼就跟著使用tab，每一層縮排使用一個 tab，而一個 tab 應為 8 個空白字元。如果是自己產生的新程式碼文件，那麼就不要用任何 tab 作為縮排，改用 4 個空白字元來縮排。在某些開發環境下，可能會自動採用 4 個空白字元的縮排法。</li>
+<li>任何一行程式碼最長應只有 79 個半形字元長。如果你遵循這份寫碼規則，但發現某些程式碼塞不進這樣的長度規定內，那麼你該檢討一下這行敘述的是否太過於複雜了──請考慮增加幾個函式來分攤它的功能。</li>
+<li>任何一行程式碼都不應以空白字元結尾。如果你認為非得這樣做不可，請再考慮一下──因為某個衰仔下次開啟這份文件的時候，它的編輯器可能自動刪除這些空白字元。</li>
+<li>宣告函式的風格：函式名稱靠左，包住函式的大括號靠左，區域變數宣告敘述告一段落時留下一個空白行。</li>
+</ul>
+
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+</pre></td><td class='code'><pre><code class='c'><span class='line'><span class="k">static</span> <span class="kt">int</span>
+</span><span class='line'><span class="nf">extra_ivars</span><span class="p">(</span><span class="n">PyTypeObject</span> <span class="o">*</span><span class="n">type</span><span class="p">,</span> <span class="n">PyTypeObject</span> <span class="o">*</span><span class="n">base</span><span class="p">)</span>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'>    <span class="kt">int</span> <span class="n">t_size</span> <span class="o">=</span> <span class="n">PyType_BASICSIZE</span><span class="p">(</span><span class="n">type</span><span class="p">);</span>
+</span><span class='line'>    <span class="kt">int</span> <span class="n">b_size</span> <span class="o">=</span> <span class="n">PyType_BASICSIZE</span><span class="p">(</span><span class="n">base</span><span class="p">);</span>
+</span><span class='line'>    <span class="n">assert</span><span class="p">(</span><span class="n">t_size</span> <span class="o">&amp;</span><span class="n">amp</span><span class="p">;</span><span class="n">gt</span><span class="p">;</span><span class="o">=</span> <span class="n">b_size</span><span class="p">);</span> <span class="cm">/* type smaller than base! */</span>
+</span><span class='line'>    <span class="p">...</span>
+</span><span class='line'>    <span class="k">return</span> <span class="mi">1</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<ul>
+<li>程式碼結構：在諸如 <code>if</code>、<code>for</code> 之類的關鍵字與其後的左括號之間留下一個空白；在左右括號的內緣不要加入空白；請參考下列範例：</li>
+</ul>
+
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class='c'><span class='line'><span class="k">if</span> <span class="p">(</span><span class="n">mro</span> <span class="o">!=</span> <span class="nb">NULL</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="p">...</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'><span class="k">else</span> <span class="p">{</span>
+</span><span class='line'>    <span class="p">...</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<ul>
+<li>關於 <code>return</code> 敘述「不應該」附加多餘的括號：</li>
+</ul>
+
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='c'><span class='line'>    <span class="k">return</span> <span class="n">Py_None</span><span class="p">;</span> <span class="cm">/* 正確的寫法 */</span>
+</span><span class='line'>    <span class="k">return</span><span class="p">(</span><span class="n">Py_None</span><span class="p">);</span> <span class="cm">/* 錯誤的寫法 */</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<ul>
+<li>函式和巨集的呼叫風格：<code>foo(a, b, c)</code> ──函式名與左括號之間不要加上空白，左右括號的內緣不要加上空白，逗號前面不要有空白，逗號後面留一個空白。</li>
+<li>在賦值、布林和比較運算子的前後都加上空白。如果在某敘述中需要用到一大堆此類運算子（低優先權運算子）的話，在這些運算子的前後都加上空白。</li>
+<li>長敘述斷行：可能的話，在一串參數列中，以逗點作為斷行點。把斷行後的每一行都加上相同長度的縮排，例如：</li>
+</ul>
+
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='c'><span class='line'>    <span class="n">PyErr_Format</span><span class="p">(</span><span class="n">PyExc_TypeError</span><span class="p">,</span>
+</span><span class='line'>            <span class="s">&quot;cannot create &#39;%.100s&#39; instances&quot;</span><span class="p">,</span>
+</span><span class='line'>            <span class="n">type</span><span class="o">-&gt;</span><span class="n">tp_name</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<ul>
+<li>如果你欲將一長串的比較運算敘述斷行，則以布林運算子作為斷行點，例如：</li>
+</ul>
+
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class='c'><span class='line'><span class="k">if</span> <span class="p">(</span><span class="n">type</span><span class="o">-&gt;</span><span class="n">tp_dictoffset</span> <span class="o">!=</span> <span class="mi">0</span> <span class="o">&amp;&amp;</span> <span class="n">base</span><span class="o">-&gt;</span><span class="n">tp_dictoffset</span> <span class="o">==</span> <span class="mi">0</span> <span class="o">&amp;&amp;</span>
+</span><span class='line'>    <span class="n">type</span><span class="o">-&gt;</span><span class="n">tp_dictoffset</span> <span class="o">==</span> <span class="n">b_size</span> <span class="o">&amp;&amp;</span>
+</span><span class='line'>    <span class="p">(</span><span class="kt">size_t</span><span class="p">)</span><span class="n">t_size</span> <span class="o">==</span> <span class="n">b_size</span> <span class="o">+</span> <span class="k">sizeof</span><span class="p">(</span><span class="n">PyObject</span> <span class="o">*</span><span class="p">))</span>
+</span><span class='line'>    <span class="k">return</span> <span class="mi">0</span><span class="p">;</span> <span class="cm">/* &quot;Forgive&quot; adding a __dict__ only */</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<ul>
+<li>在每個函式、結構宣告以及主要段落的前後都加上一空白行。</li>
+<li>在一段程式碼之前加上註解。</li>
+<li>除非某個函式或全域變數會是整個程式的公開對外介面，否則一律宣告成 <code>static</code>。</li>
+<li>對於來自外部宣告的函式與變數，則總是在標頭檔資料夾內存在相對應的標頭檔，並以 <code>DL_IMPORT()</code> 此一巨集宣告之，像是這樣：</li>
+</ul>
+
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='c'><span class='line'><span class="k">extern</span> <span class="n">DL_IMPORT</span><span class="p">(</span><span class="n">PyObject</span> <span class="o">*</span><span class="p">)</span> <span class="n">PyObject_Repr</span><span class="p">(</span><span class="n">PyObject</span> <span class="o">*</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h1>Naming conventions 命名法則</h1>
+
+<ul>
+<li>公開對外的介面函式名稱一律使用 <code>Py</code> 作前綴；內部的 <code>static</code> 函式則完全不要這樣做。<code>Py_</code> 這樣的前綴則留給全域 service routine 使用；特定 routine 群組（例如針對某種特定物件的 API 等）則使用較長前綴，像是專門處理字串的函式們以 <code>PyString_</code> 前綴。</li>
+<li>公開的函式與變數們使用 MixedCase 命名法，並在底線字元連接其名稱與前綴，像是：<code>PyObject_GetAttr</code>、<code>Py_BuildValue</code>、<code>PyExc_TypeError</code>。</li>
+<li>偶爾「內部的」函式可能會需要被外部取用；這時就使用 <code>_Py</code> 作為前綴，例如：<code>_PyObject_Dump</code>。</li>
+<li>巨集的前綴使用 MixedCase 命名，自身名稱則全大寫，舉例來說：<code>PyString_AS_STRING</code>、<code>Py_PRINT_RAW</code>。</li>
+</ul>
+
+
+<h1>Documentation Strings 文件字串</h1>
+
+<ul>
+<li>如要使用說明字串，則以 <code>PyDoc_STR()</code> 或 <code>PyDoc_STRVAR()</code> 巨集來取用，這是為了支援無說明字串選項。如果這份 C 程式碼需要支援 Python 2.3 以前的版本，則請在援引 Python.h 之後使用以下巨集：</li>
+</ul>
+
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class='c'><span class='line'><span class="cp">#ifndef PyDoc_STR</span>
+</span><span class='line'><span class="cp">#define PyDoc_VAR(name)         static char name[]</span>
+</span><span class='line'><span class="cp">#define PyDoc_STR(str)          (str)</span>
+</span><span class='line'><span class="cp">#define PyDoc_STRVAR(name, str) PyDoc_VAR(name) = PyDoc_STR(str)</span>
+</span><span class='line'><span class="cp">#endif</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<ul>
+<li>各函式的說明字串首行必須要是「簽證行」，指出關於本函式的概要，包括參數及返回值。</li>
+</ul>
+
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='c'><span class='line'><span class="n">PyDoc_STRVAR</span><span class="p">(</span><span class="n">myfunction__doc__</span><span class="p">,</span>
+</span><span class='line'>        <span class="s">&quot;myfunction(name, value) -&gt; bool</span><span class="se">\n\n</span><span class="s">\</span>
+</span><span class='line'><span class="s">        Determine whether name and value make a valid pair.&quot;</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>在簽證行與敘述之間總留下一空白行。</p>
+
+<ul>
+<li>如果函式返回值總是 <code>None</code>（意即返回值不具任何意義），則不要指定任何返回型態。</li>
+</ul>
+
+
+<p>如果要使用多行說明字串，則記得在換行時使用反斜線跳脫換行字元，不然請使用多個字串串接的方式撰寫。</p>
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='c'><span class='line'><span class="n">PyDoc_STRVAR</span><span class="p">(</span><span class="n">myfunction__doc__</span><span class="p">,</span>
+</span><span class='line'>        <span class="s">&quot;myfunction(name, value) -&gt; bool</span><span class="se">\n\n</span><span class="s">&quot;</span>
+</span><span class='line'>        <span class="s">&quot;Determine whether name and value make a valid pair.&quot;</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>即使所使用的 C 編譯器允許以非串接形式多行描述同一字串，也不要這樣寫：</p>
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class='c'><span class='line'><span class="cm">/* 不好的寫法：不要這樣寫！ */</span>    <span class="cm">/* 譯註：注意箭頭所指位置！ */</span>
+</span><span class='line'><span class="n">PyDoc_STRVAR</span><span class="p">(</span><span class="n">myfunction__doc__</span><span class="p">,</span>        <span class="err">↙</span>
+</span><span class='line'>        <span class="s">&quot;myfunction(name, value) -&gt; bool</span><span class="se">\n\n</span>
+</span><span class='line'>        <span class="n">Determine</span> <span class="n">whether</span> <span class="n">name</span> <span class="n">and</span> <span class="n">value</span> <span class="n">make</span> <span class="n">a</span> <span class="n">valid</span> <span class="n">pair</span><span class="p">.</span><span class="s">&quot;);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>當然，並不是所有的編譯器都允許不好的寫法；像是 MSVC 編譯器，如果你給它這樣的程式碼，它會向你報怨。</p>
+
+<h1>References 參考資料</h1>
+
+<ul>
+<li><a href="http://www.python.org/dev/peps/pep-0008/">PEP 8, Style Guide for Python Code</a>, van Rossum, Warsaw</li>
+</ul>
+
+
+<h1>Copyright 版權聲明</h1>
+
+<p>本文張貼於公共空間。</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Borland 要被收購了]]></title>
+    <link href="http://COLDTURNIP.github.com/blog/2009/05/07/bye-bye/"/>
+    <updated>2009-05-07T20:49:00+08:00</updated>
+    <id>http://COLDTURNIP.github.com/blog/2009/05/07/bye-bye</id>
+    <content type="html"><![CDATA[<p><a href="http://news.cnet.com/8301-1001_3-10234650-92.html">http://news.cnet.com/8301-1001_3-10234650-92.html</a></p>
+
+<p>也差不多該死透了，核心人物早走光了，BCB sxxks。</p>
+
+<p>回顧過去 Borland 的歷史，以下是洽特的 yoco 整理的主要幾個事件時間點：</p>
+
+<p><a href="http://www.niceware.net/delphi/Borland_History.htm">http://www.niceware.net/delphi/Borland_History.htm</a></p>
+
+<h1>1992</h1>
+
+<ul>
+<li>總裁 Philippe Kahn 決定花了一億多蓋了個超豪華總部，然後 Philippe Kahn 離開了 Borland，去了 Symantec，開發了 Symantec C++，我說這一手是故意的 XDDD</li>
+<li>花了一億多買了 dbase (另個網頁寫四億多)。請問現在還有洽眾在用 dbase 的嗎？這就對了！ XDDD</li>
+<li>在這個 moment，微軟開始大量從 Borland 挖角，Visual C++ 有 60% 的人是從 Borland 挖來的！</li>
+</ul>
+
+
+<h1>1994</h1>
+
+<p>Borland 的股價從 1992 年的 86 掉到 9.63。</p>
+
+<h1>1995</h1>
+
+<p>Delphi 1.0 發表，危急時刻拯救 Borland！但是就在這年，Borland 的 C++ 開始輸了，完全被微軟打死</p>
+
+<h1>1996</h1>
+
+<p>Anders Hejlsberg（神一般的男人，地球上過去二十年在軟體開發效率上的增進，有 90% 要歸功於他）被比爾蓋茲親自請去吃飯，成功挖角（事實上請了兩次才挖到XD），加入微軟。</p>
+
+<h1>1997</h1>
+
+<p>JBuilder 發表！Java 開發工具的里程碑阿！！！（2000 之後被免費的 Eclipse 打趴下 XDD）</p>
+
+<h1>1998</h1>
+
+<p>Borland 改名 Inpirse，準備改走企業用戶的高階路線。下場是完全失敗。</p>
+
+<h1>2000</h1>
+
+<p>名字改回來了 XD 然後放棄跟微軟抗爭，改成合作，在這之後一直沒什麼重大表現…</p>
+
+<h1>2006</h1>
+
+<p>賣掉旗下所有 IDE 產品！！！！！！！！！Borland 的命脈，聖杯！！！</p>
+
+<h1>2009</h1>
+
+<p>被買 XD</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[如何吧 unsigned int 轉型為 signed int]]></title>
+    <link href="http://COLDTURNIP.github.com/blog/2009/04/29/convert-unsigned-int-into-signed-int/"/>
+    <updated>2009-04-29T20:43:00+08:00</updated>
+    <id>http://COLDTURNIP.github.com/blog/2009/04/29/convert-unsigned-int-into-signed-int</id>
+    <content type="html"><![CDATA[<p>問題：如何吧 unsigned int 轉型為 signed int？</p>
+
+<p>解答：將該 unsigned int 除以 csc（Cosecant）</p>
+
+<p>(°Д° ;)？</p>
+
+<blockquote><p>Because sin = 1/csc, where 1 is an integer.</p></blockquote>
+
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[謹此獻給我誠摯一生的　兄弟]]></title>
+    <link href="http://COLDTURNIP.github.com/blog/2008/05/11/hes-my-brother/"/>
+    <updated>2008-05-11T20:40:00+08:00</updated>
+    <id>http://COLDTURNIP.github.com/blog/2008/05/11/hes-my-brother</id>
+    <content type="html"><![CDATA[<p>He is my family. He was, he is, and he always will be.</p>
+
+<p>他是一條米格魯小公狗，他是有名字的，請稱他為 Puppy 或胖皮。</p>
+
+<p>Puppy 生於 2000 年 6 月 12 日台北的某個家庭中。我不曾見過他的親生母親、父親甚至他其它的五個兄第姊妹；大概在他還沒有深刻的記憶時就已經離開他親生的血緣家庭，可能是因為他母親的飼主無力同時撫養這麼多隻活力十足且食量驚人的米格魯，也可能是其它原因。總之，在出生數週內就已經離開了他們。</p>
+
+<p>那時候的 Puppy 還不叫作 Puppy。第一個喊他名字的人是我的小姑姑，那個時候的 Puppy 還叫作泥巴。實際上泥巴這個名字並不洽當，他的毛色雖然是米格魯一般與泥巴一樣的黑、褐與白色的混合，但卻是一絲不苟地層次排好：嘴巴是白色的，腳上也穿著白襪，尾尖也是顯眼的白，褐色是他的耳朵與蒙面，後頸是公公正正對稱三角形的白色領巾，最後是黑得發亮的背。作為一隻米格魯，彷彿是毛色分佈的展示範本，雖然沒有血統證明，但就外觀而言是絕不容質疑的標準。</p>
+
+<p>「泥巴」這個稱號並不合適的另一個證明，在他的一生中完完全全沒有玩過真正的泥巴。</p>
+
+<p>我不懂當初我姑姑是為了什麼緣故領養了他，也許是為了彌補剛離婚時的寂寞；但後來這項決定並沒有治瘉她的心，卻在他的一生畫上了第一道色調，那筆觸是灰藍色的。</p>
+
+<p>雖然離婚的決定替我姑姑掙得了某些自由，但她依然還是得面對經濟生活的壓力，所以泥巴記憶中的前幾週是一間空盪盪的住宅。他可能曾經試著竭力嘶喊，試圖能證明他並不是地球上唯一的生命體，可想而知的是窗外的風吹聲是唯一的陪伴。</p>
+
+<p>幾週後，我姑姑也發現了這個事實。一隻剛滿月的小狗要面臨孤單與禁錮未免太殘酷，所以她問了她的大哥，希望能為泥巴換個家。</p>
+
+<p>數日後，一個小高一男生某日回到家發現一隻可愛的米格魯小狗在客廳奔跑跳躍，那份心情是難以言喻的。</p>
+
+<p>「我們家不是不能養狗嗎？」我曾經回憶過，小時候某次在放學後的學校撿到濕透紙箱附贈一隻小狗，然後回家被父親唸著罵著不得不把紙箱放回原處。很小很小時候的我對於狗類是又愛又怕，曾經被咬過、被追過，但是這種動物卻依然可愛。</p>
+
+<p>所以說，一來算是母親對於生命的憐憫，一來也算是作為我考上高中時候的禮物，那個夏天他來到了我家，那天我認識了他。</p>
+
+<p>那天晚餐，我們討論著該幫他取個什麼樣的名字。名字是存在的證明，雖然我的意見並沒有想出獨一無二的華麗名字，卻不想沿用別人已經取好的名字；母親也認為「泥巴」這個名字不合意；一頓飯吃完，四個人還做不出結論，於是就直接稱他為 Puppy（小狗）了。</p>
+
+<p>Puppy 啊！現在的你，應該已經聽的懂人類的中文好幾年了。也許你的一生中從未質疑過，但你的名字的確就是這麼來的。</p>
+
+<p>Puppy 剛開始在我家生活的一個月還算是相當不自由。為了防止不懂事的他在半夜造成什麼意外，只好在我們睡覺的時候把他關進狗籠，就放在我家前面房間的外面。狗的生活其實是夜行性的，有時候半夜他會發出抗議，有幾次我半夜跑起來去陪陪他。</p>
+
+<p>Puppy 的母親沒給過他什麼特別的東西，除了他的生命、漂亮的毛色與駭人的絛蟲。記得是不久絛蟲被治好後，他才得到半夜到處跑的權利。</p>
+
+<p>算算看，在他身為家犬的一生中，超過 99% 的時間都在和我們一家四口相處，這之中對他最差的大概就是我這個名義上的主人了。</p>
+
+<p>小時候的 Puppy 很頑皮，完全承襲了米格魯的標準個性。也可能是他剛出生時那幾週的孤獨使他感到害怕，他終其一生不能坦然面對只有自己一個生命體的空盪住宅；當他開始熟悉家裡環境之後，在我們留他看家時除了大聲的哭鬧，也開始學會表達他不被帶出門的憤怒，例如把桌巾整個扯下來、把椅子上的抱枕丟在地上、把看得到的紙類撕成碎片、把家裡每一個垃圾筒推倒。那個時候他還很小，我也很小，死高中並沒有教育狗兒的正確觀念；那個時候的我回家看到滿地的東西會罵他、甚至拿東西打他，就跟小時候被父親鞭打一樣；當然他也會反擊，小小一隻米格魯反擊起來也是很可怕的，他咬我我咬他，常常人狗打成一團。現在想想，Puppy 的那段生活真的非常不幸，那段時間的我的罪過即使是下了地獄也不足為奇；更為諷刺的是，當時的我已經是長城童軍了。</p>
+
+<p>大概是 Puppy 兩歲半的時候，漸漸地我們學會了教育狗兒的正確方法，從打罵改成罰他關禁閉；雖然禁閉是處罰，但比起被打還是快樂得多，後來也養成他把小狗籠子當成避風港的習慣。</p>
+
+<p>狗兒真的非常可愛，儘管還是會長成成犬，Puppy 依舊是 Puppy，小型犬的先天優勢就是會一直非常可愛。</p>
+
+<p>除非必要，否則 Puppy 很少出門。他在家裡擁有到處亂跑的權利，但因為母親怕他在外又再度感染跳蚤或寄生蟲，於是他這一生是隻完完全全的家犬。雖然在大家出門卻不帶上他的時候令他不能忍受、還有一點小小的不良嗜好，但其實在有人在家裡時他都很乖很溫馴，不像臨近幾戶人家的狗、有事沒事就對著陽台不停該該。</p>
+
+<p>說到不良嗜好，Puppy 從小到大一直喜歡啃紙，各種紙類產品對他而言都是嚼不完的口香糖。曾經有一陣子母親任命他為碎紙機。</p>
+
+<p>大部份米格魯先天除了先天頑皮喜歡搞怪以外，另一個問題就是貪吃。記憶中 Puppy 不愛吃的東西其實很少，他只討厭某些軟軟濕濕的東西，像是海蔘和橘子，不過也不是完全不吃就是了。Puppy 有個很好玩的習慣，或是說禮貌，對於別人請他吃的東西其實無論如何他都會先接受，好吃的東西當然直接吞下去，討厭的東西則會趁（他自以為）沒人注意的時候藏到角落，好比是冰箱下面的夾層或是書架下的隙縫。雖然我們給他的正餐都是乾狗糧，但他通常都會拼命把狗糧吃完之後來餐桌跟我們要東西吃。</p>
+
+<p>Puppy 在想著和別人分杯羹的時候也很有方法。通常是先在人腳邊嗅嗅聞聞，弄得人癢癢的，然後坐下來，黑亮的瞳孔迷漫著哀求的眼光；如果不理他，他再嗅嗅聞聞弄癢癢一番，停下來繼續哀求。</p>
+
+<p>之所以會靜靜坐著等，那是因為「坐好」是 Puppy 有生以來學會的唯二個把戲之一；小時候為了訓練他玩把戲，不坐好就不給晚餐，可能也因為這樣，所以他的觀念中覺得坐好等於對食物的請求。第二個把戲是握手。</p>
+
+<p>如果坐好向人要東西吃卻不為理采，這時候就會試著趴到人家身上了。這也常常是他挨罵的原因，可是每次講每次犯。</p>
+
+<p>其實 Puppy 很聰明的，對他說的話其實他都聽得懂，只是有時候故意裝作不知道。例如有時候我們剛到家的時候他會熱情地在門邊迎接，有時候會覺得：唉呀，Puppy 好乖，看家不搗蛋，應該賞塊狗餅乾；但當走進房間一看是滿地紙屑的時候，很神奇地要再找到他會是在狗籠中或是餐桌的下面。又例如他討厭洗澡，平常叫他都會一蹦一跳地跑過來，但在他聽到「Puppy 來洗澡」的時候，只會歪著頭在原地裝作聽不懂；開始走向他的時候他就開始逃了！</p>
+
+<p>Puppy 啊，還記得你第一次喝汽水的時候嗎？那點橘子芬達讓你喝了好久，喝完舌頭整個都是橘色的。</p>
+
+<p>Puppy 啊，還記得你第一次到桃園老家的時候嗎？透天厝的樓梯你還不知道怎麼爬，來年再去的時候跑上跑下都不會累。</p>
+
+<p>Puppy 啊，還記得你第一次打預防針的時候嗎？那時候還不知道打針會痛，之後每次牽著你往獸醫的方向走都是邊走邊抖。</p>
+
+<p>Puppy 啊，還記得你第一次被牽著出去蹓躂的時候嗎？身為公狗卻像個小姑娘，對什麼東西都是好奇又害怕，路上小你一歲的小母狗找你玩你還躲到鞋子後面偷看人家。</p>
+
+<p>Puppy 對我來說是一種重要的存在。小時候一直想要養隻狗的願望在他身上實現，也讓我學到很多東西。儘管在他很小的時候我對他並不好，而且因為大學開始住校的因素讓一家四個人裡面陪伴他時數最短的人是我，但是沒有一次我回家時他不是跑到門邊一邊搖著尾巴一邊跳上來的，一直跟跟跟到我的房間、放下東西、蹲下來摸摸他、讓他舔個不停；真的是舔個不停，不阻止他的話就會沒完沒了地在臉上塗滿口水，有時候還會不小心在身上留下爪痕。這也是 Puppy 身為家犬的敬業精神，他對待所有剛進門的人都非常熱情，家裡有門鈴響起他一定衝第一個到門邊等待，他喜歡客人，雖然有時候客人怕狗。我的二姨媽以前十分怕狗，Puppy 曾經把人家嚇壞了，不過他後來也成功地成為我二姨媽目前在這世界上唯一不會害怕的一隻狗，初二回娘家還常常請 Puppy 吃東西。</p>
+
+<p>老實說，大學時代偶爾回家一趟，除了有必要的事回得回家辦、或覺得太久沒回家怕被唸，另一個重要的原因就是想回家看看 Puppy。純粹就是想看看他，摸摸他的頭，讓他舔舔我，和他講幾句話。</p>
+
+<p>放長假的時候，全家大概也就屬我和 Puppy 的生活時間表最相近──半夜超晚睡，一覺到下午。半夜在家打三國的時候他就陪在旁邊，我去睡覺他就跑去跟我父母親窩，早上吃過狗早餐就跳上我的床一起糜爛地晒屁鼓睡到下午。</p>
+
+<p>另一個令我感到高興的地方是，全世界的人要叫 Puppy 只能喚他的名字，但我只要吹個長音他就會跑過來（嗯，如果是該裝傻的場合還是一樣裝傻）。母親說在我不在家的時候，她也曾試過吹個口哨看看 Puppy 會不會有反應，但結果是沒有。我非常感謝 Puppy 賜給我這樣的特權，在我相對難得住在台北家中的日子享有特別的召喚方式，不幸的是也因為如此，我喊 Puppy 名字的次數少之又少。</p>
+
+<p>Puppy 會等門，這是我從父母口中得知的。每當寒暑假放完、我和弟弟不得不回學校後數日，每個晚上的十點多，Puppy 會趴在門邊等著，就這樣等著，也不咬著球吵著人家陪他玩。Puppy 從來沒有機會也沒有辦法說過他等待的是什麼。</p>
+
+<p>我很感謝命運中讓我與 Puppy 相遇。從高一到執筆的現在，人言「男子漢有淚不輕彈、只能在父母去逝的時候哭泣」，但實際上我大哭了三次了。一次是升大學指考結束填科系志願卡的時候，大家也知道我被迫與夢想中的資工路線無緣；僅管當晚與父親爭執之後氣哭了，半夜卻又偷偷摸黑起來哭泣一次，為了自己無法決定自己的未來感到痛苦。</p>
+
+<p>沒有人安慰我，只有 Puppy 半夜在家裡閒晃，無聲地走過來舔舔我的手、舔舔我的淚。Puppy 啊！你還記得淚水的味道嗎？狗兒的淚腺從來不允許你嚐試哭泣的滋味，但那時候全世界只有你知道我的淚水是苦的。</p>
+
+<p>第二次哭泣就是這學期（碩一下）開學前幾日了，父親的工作調往大陸擔任廠長，母親在未來不得不一起前去大陸陪他。台北的家裡即將長期沒人，不得不將 Puppy 託付給住在桃園還要照顧祖父祖母的叔叔。那次哭泣的原因真的是捨不得，捨不得沒事回台北看得到父母和 Puppy 的日子，捨不得 Puppy 要離開這個幾乎從出生到現在都生活著的台北家中。這隻家犬相當依賴他所熟知的環境，曾經有一次表妹們借 Puppy 去他們家住一天，後來表妹們表示 Puppy 當晚相當地沒有精神。這次的寄養可不是一天兩天的了，要離開陪我們睡大覺的床，要離開每天照顧他和他講話的母親，要離開每晚陪他丟球請他吃宵夜的父親，要離開那個他常常喜歡爬上去看風景的陽台，然後去每年過年才會住上兩三夜的桃園居住。以 Puppy 的觀點真的是難以接受，想到這點我就感到難過，不知不覺就躲在被窩裡哭起來了。</p>
+
+<p>沒辦法，我們家四個人沒有人可以留在台北照顧 Puppy，也沒能把 Puppy 帶到新竹、嘉義或上海。只是那次偷偷哭泣的時候 Puppy 沒能陪我，因為當時的他還在陪著比我更晚睡的弟弟挑燈夜戰打電動。</p>
+
+<p>第三次哭泣了。我很軟弱地居然在公開場合流下淚來，就在大潤發的停車場打著越洋電話通知母親今天的事情，不知不覺地就失去控制。</p>
+
+<p>今天早上，一如前幾日地，早上六點多就跑到學校去浪費體能，然後在小吃部享受早餐。</p>
+
+<p>一隻黑狗搖著尾巴走到我的腳邊，用鬍鬚輕觸著我的腳，癢癢的，然後坐在旁邊，用黑亮帶著哀求的眼神看著我。</p>
+
+<p>這讓我想到 Puppy。我很想他。這學期除了總統大選回台北投票、以及參加難得的童軍團五十週年團慶，我就再也沒有回過台北，也沒有動力讓我去看看那間空盪盪的房子。這時候我真的很想去一趟桃園，看看 Puppy，抱抱他，摸摸他的頭，跟他講幾句話。</p>
+
+<p>其實今天早上很忙碌，因為十點的 meeting 剛好輪到我上台報 paper。今天報的那篇又非常長，原文足足十頁的數學推導，原訂兩個小時的 meeting ，我站在台上的時間一共一小時四十分鐘。</p>
+
+<p>一直到中午買完午餐回來，才吃完第一口，桃園來了一通電話，這時我才發現十點多的未接來電列滿整個螢幕。</p>
+
+<p>接完電話，我的腦袋一片空白。</p>
+
+<p>剩下的便當我完全沒有辦法去碰，多多綠也是整杯請洗手台喝了。</p>
+
+<p>Puppy 是今天早上十點多走的，原因是急性胰臟炎。據說我祖父有看到 Puppy前幾天開始嘔吐，於是昨天叔叔送他到附近的獸醫作檢查，發現有內臟出血的情況，大便有血塊，耳朵、牙齦的部份也沒什麼血色，於是昨晚決定住院打點滴。晚上九點多，醫院要關門，叔叔也只好先回家。後來據院方表示，今天早上九點多的時候 Puppy 的嘔吐物開始有血，之後昏迷，開始執行急救，最後急救無效，在十點宣告不治。</p>
+
+<p>昨天晚上送醫後，叔叔和姑姑已經有和上海的父母聯繫。母親知道 Puppy 大概熬不了這關，今天早上起床的時候已經哭了一次。今天在電話中講著講著又哭了一次。</p>
+
+<p>三點上展頻的時候我只想把時間耗完，至於耗完之後我能做什麼我也沒有想。</p>
+
+<p>去大潤發買完東西，回家後轉達剛剛母親要我轉達給弟弟的消息，在電話中我又失控了一次。</p>
+
+<p>很久以前，別人分享著寵物離喪之慟；那時候我總是覺得難以和家人死別比較。但今天我發現離我遠去的其實是兄弟。</p>
+
+<p>叔叔原本有問我要不要他來載我一起去領回 Puppy 的遺體。我說，週五有期中考，所以我覺得我沒辦法去，但我很清楚這是籍口。我不能接受不會動的 Puppy，我不能接受不會一蹦一跳來到門邊迎接我去看他的 Puppy，我不能接受這一切。理性告訴我應該去看他最後一面，至少代替他生命中最重要的四個人過去看他；理性也告訴我去看 Puppy 的話，他以孤獨寂寞和難過作為序曲的生命才不會又以孤獨寂寞和難過作為終曲。</p>
+
+<p>但是我發現我做不到，我真的做不到。我整個人突然間完完全全地崩塌了。我的極限只能支撐著我在同學前的表面上假裝冷靜，但就在我打電話給母親的時候再也無力支撐，就這樣在停車場掎著機車哭了起來。</p>
+
+<p>我痛恨這個世界，痛恨這個讓我再也見不到 Puppy 的世界，痛恨這個留我一個人下來吃香喝辣卻無法給 Puppy 分杯羹的世界。</p>
+
+<p>Puppy，我羅運昌在這一生中對不起你，這最後的半年來沒有去桃園看過你，就連你生命結束之前結束之後都如此無能，真的是完完全全地對你只有遺憾與抱歉。投名狀說：「記住我的臉，下輩子找我報仇。」如果你現在還能聽到我的語言，希望不只是下輩子找我報仇，下下輩子、下下下輩子、下下下下輩子…</p>
+
+<p>更希望你能找到一個比我更疼愛你的主人。明明我還有那麼多的事想為你做，讓你看看我的碩士畢業證書、讓你嚐嚐我用第一份薪水買給你的食物、讓你聽聽更多我所聽到的趣事…</p>
+
+<p>今天我買了一盒你最喜歡吃的小蕃茄，一罐每年過年年夜飯加菜用的狗罐頭，還有一條金莎。吃蕃茄不準用吞的，吃不下可以不用藏起來，我幫你留著；吃狗罐頭的的時候也可以吃慢一點，小心不要嗆到了；你愛吃巧克力，生前巧克力對狗狗身體不好，好幾天才能請你吃一小粒，現在請盡量享用沒有關係。</p>
+
+<p>下個月是你八歲生日，會幫你準備好蛋糕，幫你慶生，圍著你，然後讓你歪著頭不知道我們在幹麼，一如往年，母親已經跟我說過了。</p>
+
+<p>請記得回來過生日，每年的你的生日，my dear brother.</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[新竹眾的日常 卷三]]></title>
+    <link href="http://COLDTURNIP.github.com/blog/2008/04/22/life-with-my-classmates-in-hsinchu-part-3/"/>
+    <updated>2008-04-22T20:37:00+08:00</updated>
+    <id>http://COLDTURNIP.github.com/blog/2008/04/22/life-with-my-classmates-in-hsinchu-part-3</id>
+    <content type="html"><![CDATA[<p>某路人甲：「Could you say 『維大力』？」</p>
+
+<p>外籍生甲：「… That advertisement is really funny, I know.」</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[蘿蔔的日常 卷一]]></title>
+    <link href="http://COLDTURNIP.github.com/blog/2008/04/08/life-in-hsinchu/"/>
+    <updated>2008-04-08T20:36:00+08:00</updated>
+    <id>http://COLDTURNIP.github.com/blog/2008/04/08/life-in-hsinchu</id>
+    <content type="html"><![CDATA[<p>「買完午餐要回實驗室，手上提著香噴噴的麵條。」</p>
+
+<p>「電梯來了，只有我和路人甲進了電梯。」</p>
+
+<p>「他按下八樓，我按下六樓。電梯的門關上了。」</p>
+
+<p>「只見他用迅雷不及掩耳的速度把剩下樓層全部按了一遍，然後在二樓跑出去了！」</p>
+
+<p>「是我醜到令人討厭嗎 QQ」</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[新竹眾的日常 卷二]]></title>
+    <link href="http://COLDTURNIP.github.com/blog/2007/09/20/life-with-my-classmates-in-hsinchu-part-2/"/>
+    <updated>2007-09-20T20:32:00+08:00</updated>
+    <id>http://COLDTURNIP.github.com/blog/2007/09/20/life-with-my-classmates-in-hsinchu-part-2</id>
+    <content type="html"><![CDATA[<p>「這台電腦正在跑程式啦。」</p>
+
+<p>這裡是實驗室裡面。今天不知道是什麼黃道吉日，公共區的電腦全都被拿來跑</p>
+
+<p>程式了。</p>
+
+<p>「我知道啊。」C*W 把最後面角落裡的某一台電腦叫醒。</p>
+
+<p>螢幕上貼著一張隨處可見的 3M 便條紙，上面寫著「正在跑程式，請勿關機」</p>
+
+<p>的字樣，看起來的意義就像是「我會爆炸，請勿拍打玻璃」的感覺。</p>
+
+<blockquote><p>噗呲！</p></blockquote>
+
+<p>「剛剛發生了什麼事？」秋秋好像發現了什麼。</p>
+
+<p>「我好像聽到了『噗呲』一聲」連耳背的蘿蔔也好像發現了什麼。</p>
+
+<p>「可是我剛剛什麼事也沒做啊！」C*W 檢查了一下自己的腳邊，又檢查了一下</p>
+
+<p>這台電腦，發現延長線的開關不知道什麼時候被切掉了。</p>
+
+<p>「看起來學長的程式要重跑了，跟我沒關係喔！」</p>
+
+<p>「…我也要先回家了，你小心一點吧！」</p>
+
+<p>「可是我明明沒有碰到什麼啊 (つД‵)」</p>
+
+<p>「不然要怎麼辦？」</p>
+
+<p>「…我可以裝作不知道也先回家嗎？」</p>
+
+<p>「你還是問一下是哪個學長的程式吧。」</p>
+
+<p>C*W 同意這個作法，隨手拍了一下背對著他某個看起來很和善的學長。</p>
+
+<p>在他開口之前，學長已經先開口了…</p>
+
+<p>「沒關係，我都已經聽到了。」學長很和善地講出這句話。</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[新竹眾的日常 卷一]]></title>
+    <link href="http://COLDTURNIP.github.com/blog/2007/08/07/life-with-my-classmates-in-hsinchu/"/>
+    <updated>2007-08-07T20:30:00+08:00</updated>
+    <id>http://COLDTURNIP.github.com/blog/2007/08/07/life-with-my-classmates-in-hsinchu</id>
+    <content type="html"><![CDATA[<p>「咦？小宋換新皮包了？」</p>
+
+<p>一行人在某家很難吃的貴族世家裡面用著晚餐。餐畢，準備結帳之餘，小宋拿出了他新買的錢包。</p>
+
+<p>「好可愛，自己做的嗎？」「女朋友送的嗎？」</p>
+
+<p>「不是啦！自己花錢買的。」小宋慌忙解釋道。</p>
+
+<p>「為什麼不買小狗的呢？」</p>
+
+<p>瓜瓜冒出了這樣一個問題。有人差點把喝進去的可樂噴回杯子裡面。</p>
+
+<p>「這樣人家要偷你的錢包的時候還會被咬啊～」</p>
+
+<p>「…晚上有人偷偷進來的時候還會叫是吧…」</p>
+
+<p>「對啊！而且一不注意的話，貓頭鷹還會飛走喔！」</p>
+
+<p>好像很有道理。</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[多年散後的一聚]]></title>
+    <link href="http://COLDTURNIP.github.com/blog/2006/08/12/the-classmates-after-high-school/"/>
+    <updated>2006-08-12T20:26:00+08:00</updated>
+    <id>http://COLDTURNIP.github.com/blog/2006/08/12/the-classmates-after-high-school</id>
+    <content type="html"><![CDATA[<p>本來，蘿蔔在週五晚上是有工程數學補習的，但是今天卻翹掉了；原因並不出於個人的墮性，而是因為今天是意義非凡的一次高中同學會。</p>
+
+<p>先是很巧地在木柵線上遇到了張孟傑，然後六點半之後在集合地點大家陸續趕到（每次同學會都沒準時開始過，這才是台灣人嘛  囧）。</p>
+
+<p>之所以說是意義非凡的一次同學會，是因為老師第一次在同學會上出席，而且這次的參加率也是空前地高，加上老師共 38 人出席；許多人也是第一次在同學會上出現，像是菲姊、Mars 等等。當然還是免不了有些不克參加（萬哥等）與失去聯繫的人（挑桿、黃興等等）。朱羊還把那件畫滿每個同學象徵圖樣的班服穿來，曾幾何時按圖所驥也成了同學會的一種樂趣。</p>
+
+<p>Mars 出現在同學會真是讓我嚇到了（這是黑歷史，賣問）；不知是否是為了呈現令人懷念的形象，他穿了件沒有打上領帶的襯衫，然後把襯衫紮進了長褲裡…（流汗）。一見面就跟我講到了他玩 BR 的心得、關於動畫與 CV 的心得、最近看的動畫和最近玩的遊戲…在正經不易親近的表面下滿腹的隱性 otaku，這個 Mars 就某種程度上算是完全沒有改變。</p>
+
+<p>今天中央眾也全部都出席了，一見面大家都很熟識地互相吐嘈，而瞎子被我吐得最兇–我不小心把大一翹課的豐功偉業以及 DSP 沒上過課卻在期中考考了個 104 出來；就當作是他帶了女朋友來閃人的代價吧！上了大學以後十分低調的王鈺德也算是同學會的稀客，但與大家不同地是他不打算進攻研究所的人生規劃。康妖不改本性，不過提到盧笛為了女友的電腦把他載到新竹的事，大家都笑了。至於 CYC，平常在學校也是常常見面的很，只有小聊了一下，他提到他應該會去跟專題的教授直升他們系醫工組（這不就是周易在說的「大雜燴研究室」嗎）。</p>
+
+<p>臥虎的打算，一如預估的，資電與經濟雙修的結果還是無法準時畢業，不過他的想法是：「如果為了準時畢業，而沒有辦法修到自己想修的課，這不是很令人感到遺憾嗎？」</p>
+
+<p>龍哥和 Mars 兩個人雖在不同的大學讀書，但卻不約而同地做了同樣題目的專題（影像處理，超外差什麼的）。賓拉登不打算去做炸彈了，一見面就說：「我們有個老師跳槽去你那邊教書了」，一問之下原來是指許獻聰…</p>
+
+<p>蘿：「你有修過許獻聰的課嗎？」</p>
+
+<p>賓：「有啊，資料結構。」</p>
+
+<p>蘿：「他是不是教很快？」</p>
+
+<p>賓：「對啊，他把整部投影片都教完了。」</p>
+
+<p>看來淡江電機與我們在上完許氏資結之後有相同的感想 XD</p>
+
+<p>痴漢不打算在讀完工業教育之後追隨許瑞德（我們高中的工藝老師許銘德）的腳步，而是想去考考看資工所。</p>
+
+<p>菲姊輔修了經濟方面的系，他打算多修個一年再去考這方面的研究所…但聊到了近況他都隻字不提，說到了他的女朋友他還急速否認，真是此地無銀三百兩；更何況我們有些人大一就有耳聞了，只是不知道是不是同一個而已。</p>
+
+<p>Muscle 兩度成為大家的焦點–一是小賴提到，某夏日去 Muscle 住處遊玩，Muscle 放小賴一個人在外面，自己跟女友在寢室裡不知道在幹麼；等到反鎖解開，Muscle 一個人打著赤膊走出來，喃喃地說著：「我先去洗個澡」（謎度已經破表了，尤其是在一群心智未開的死大學生的話題之中）。第二度成為焦點的是，大家突然想起了高中常玩的一個遊戲，今天為了慶祝應該重溫舊夢一下。這是什麼樣的遊戲呢？其實沒什麼，就是扒了 Muscle 的衣服，讓他展示一下他天生的奇特肌肉（不然這綽號是哪來的？），然後幫他彩繪人體，而一切當然是要在當事人在公開場合努力抵抗的情況才顯得刺激，換言之就是變態 XD</p>
+
+<p>鶯哥今天也給我上了一課「如何尋找一條中壢直達鶯歌 80km 快速道路」，然後他說了，「有空請來鶯歌參觀陶瓷博物館吧！」「嗯，沒問題，有什麼推獎的參觀點嗎？」「老實說，我也不知道…我這個在地人也是從來也沒去過。」</p>
+
+<p>wryyyyyyy 那你還叫我去幹麼！</p>
+
+<blockquote><p>「等你參觀完，請跟我講講心得，我再考慮要不要去逛。」</p></blockquote>
+
+<p>搞什麼鬼嘛…</p>
+
+<p>日本鬼他說他不拍 A 片了，整天在打他新買的凶盒一圈（Xbox 360，我以為這個沒有遊戲的主機只適合拿來墊腳）；因為他同是通訊人，我跟他聊的主題也較為深入–真是驚人，他的專題是在做鎖相迴路，而且不止是把電路實作出來，連電子組那邊的 VLSI Layout 也一起包了，交給國家晶片中心真正搞一片 Chip 出來！</p>
+
+<p>這次同學會舉行的地點是在一家叫「亞廬」的餐廳，吃義式窯烤的地方；原本東西很道地，佈置也應十分舒適，可惜這近來腸胃微恙，而且是同學會的熱鬧場合使得通道十分擁擠。值得慶興的是，大家都很盡興，有種重新回到過去歡樂時光的感覺，我想這就夠了。「所謂的長大成人就是不斷的聚了散、散了又聚」，不知道數年後，大家是否還能如此聚上一回呢？不知數年後，各人的際遇又會如何地延展分差呢？</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[待宵]]></title>
+    <link href="http://COLDTURNIP.github.com/blog/2006/07/31/the-night-before-full-moon/"/>
+    <updated>2006-07-31T20:17:00+08:00</updated>
+    <id>http://COLDTURNIP.github.com/blog/2006/07/31/the-night-before-full-moon</id>
+    <content type="html"><![CDATA[<p>「今天的感覺不是很對。」竹簾後傳出一個女性的聲音，鎮定中似乎藏著一些恐懼。隱約可見的，她的身後是幾面繡上櫻花的華麗屏風。</p>
+
+<p>在我身旁，是一個看似敏銳的青年。他身著平安時代（註一）貴族常見型式的白色正經衣著，手上的扇子「啪」一聲合起，銳利的眼神在我對著他感到好奇的同時經劃過竹簾的間隙。</p>
+
+<p>「需要我們先送妳到那個地方去避一避嗎？」「要！」</p>
+
+<p>「…那麼，來人，備駕。」句點還沒消失在這個時空中，簾子馬上就被簾子後面的人掀開了，對於這句命令式的發言彷彿是等待已久；那位穿著十二單衣（註二）華服的女性，柔順的及地長髮透露出她平日優閒不曾困苦的生活，臉上的汗珠與快速的步履卻難掩她此時深刻的驚恐，搶上了不知何處備來的小轎，而她倉促的舉動也讓我無暇仔細觀察推敲她到底是怎樣的一個貴人，還有她是否擁有與身份相襯的氣質。</p>
+
+<hr />
+
+<p>隨著這個刻意低調且馬不停蹄的隊伍…不對，並沒有馬，似乎是對於腳步與足跡非常在乎地，四個轎夫、青年與我的腳上都穿著柔軟的草鞋。青年似乎對於趕路一事特別重視，也或許是刻意忽略地，對於身著與腳上的不協調感並不引以為意。那面扇子在路途中也沒再度展開過。</p>
+
+<p>也不知道走過了多久。從出了府、出了城、出了田野草屋所及、出了鋪著細碎圓石的進山步道，又在竹林間走了多久，我已經不記得了，而我也不感到疲倦–這個隊伍彌漫著一種不尋常的氣氛，不管是在出發的動機，仰或是不發一語的眾人，還是頻頻回顧來途的小心目光。我只是一直跟著走，一直走，總是感到什麼令人發自內心的想法、足以抽動肌肉的恐慌，「快了快了，快了快了，快了快了」…</p>
+
+<p>「那麼，妳在這裡先待上幾天。我們還有一些事情得先去現場看看…」在我們來到間朽木涼亭，青年這樣交待著尚在前進的轎中的貴族女姓；在我還沒來得及確認是否聽見轎中傳來的微弱應答之前，白衣青年馬上拉著我往另一個方向快步前去…</p>
+
+<p>又這樣跑走相間地在山中走了半個多小時。</p>
+
+<p>這些詭譎已經讓我不知從何問起，亦不知從何可得到解答；這條路持續地緩緩向山頂蜿蜒而上，原本還可以見到雲朵的竹林漸漸只能從竹葉間看見天空的顏色了–曾幾何時，天空已經變成了紫色？天邊那倉朵雲仍微微映著落日的幾絲金黃，而在另一個方向，銀灰色的圓月已經在參差不齊的紫色邊緣出現。</p>
+
+<p>紫色的天空向暮時間越來越紫得令人發狂，也令人在掃視四週向晚竹林間時發現了同道的路人；而如同紫色的蔓延，越是接近山頂的山道上，同行的路人也越來越多。有壓低斗笠的僧人，有帶著長棍的村夫，有破爛外表的劍士，也有少數跟我身邊這位一樣身著官人服飾的男人們。沒有人向其他人攀談；整個隊伍在山道上成了一條令人窒息的長蛇，不停向山頂蠕動。</p>
+
+<p>「沒想到天已經快黑了…今天是會是圓月嗎？」幾個小時以來，我終於忍不住問了一句；但在說完的同時，我卻對打破沉默的這無聊的問句感到後悔。可是身邊的這位…呃…伙伴（？）連看都不看我一眼，回應我問句的是背後不知名的低沉語調：「不是滿月，今天是待宵（註三）。」在我轉頭過去的同時，又一個方向傳來另一個不知名的私語：「現在正當逢魔之刻（註四），少講一點話對你有幫助。」。我噤口不敢再發一語，只管跟著往前一探究竟。最後，我們來到一個類似瀑布觀景台的地方，已經有很多人聚集在這裡。觀景台的對面是一座木製的高塔，高塔的外面掛著無數的紅色燈籠，而貼著歪斜符紙的門窗中又透出令人發毛的綠色光線。整個塔不但在裝飾上邪門得很，配上紫色天空的背景又是邪上加邪。低頭想在避開這個塔的樣貌時，又不得不注意到塔前到觀景台之間的那個廣場–連我這個從來沒有參加過任何宗教活動的人，都可以很直接地明瞭，廣場上是個祭壇，而且是個主祭陰的祭壇…</p>
+
+<p>人們在觀景台上並沒有等得太久。不知道是哪裡傳來主祭者的洪亮聲音：「逢魔之刻將近尾聲，鬼月祭嗣大典快快開始。」接著，從塔裡面走出來，一排一排的人偶，開始圍著祭壇，誦著詭異的經文…我不得不說，這時候的確很協調–紫色的逢魔暮色、看似完美的待宵月、貼滿符文的高塔、陰氣四散的祭壇、誦著經文的白色娃娃。整個場面沒有一處不是散發著不詳感…</p>
+
+<p>「…茲此慶賀，鬼月鬼門鬼世界，魅魍魎魖魁魑魈，人間陰間一線間！」那段奇怪的經文，在我好不容易聽懂一句的同時，就這樣就嘎然而止。</p>
+
+<p>在冗長無盡的數秒寒冷之後，又傳來主祭者洪亮的聲音：「今年此日，在鬼月將正中間的此刻此地，我們在此祭鬼…」</p>
+
+<p>最後一個音拖得很長…</p>
+
+<p>「…但是，鬼自己就可以祭鬼，還需要人類嗎！！！」</p>
+
+<p>白色的人偶面具、嘈雜的慘叫與嬉笑、打結的混亂髮絲、被踩住的手掌、遮住了視線的鮮血。</p>
+
+<h1>後記</h1>
+
+<p>最後，我嚇醒了，冒出了一堆冷汗，冒出了很多很多冷汗，那時是下午三點半。還好，只是一場夢。（所以我又繼續睡我的覺 XDDDD）</p>
+
+<p>明明我睡前玩的是 LocoRoco 這種治癒系遊戲，又不是玩那個整個遊戲裡面都是妖魔鬼怪的東方永夜抄，怎麼會作這種夢呢   囧</p>
+
+<p>然後在今天補完線代之後，我想在夢境還沒褪去之前把它寫下來，所以跑到了系館來寫，一寫就不可停止，寫到最後一段時剛好一點半，也就是現在…</p>
+
+<p>不寫了，再寫我就要尿出來了；電腦教室現在只有我一個人，門外是漆黑搖曳的樹影 <0></p>
+
+<h1>註解</h1>
+
+<ol>
+<li>平安時代：日本古代與近代的分野，因為桓武天皇遷都到平安京（京都）而得名，一直到源賴朝經過源平合戰之後建立鎌倉幕府為止。源氏物語、竹取物語大致都是這個時代的著作。</li>
+<li>十二單衣：古日本對於正統女性和服的統稱，但後來對十二單衣的定義改成是貴族專屬的昂貴華服。</li>
+<li>待宵：農歷十四日的月亮，也就是藤原千代子（還記得她吧？）最喜歡的月亮。隔天就是滿月。</li>
+<li>逢魔之刻：古代的日本迷信，認為黃昏那種曖昧不明的時刻，常常會有鬼怪扮作人的樣子出沒。不過那都是很古老的迷信。</li>
+</ol>
+
+
+<h1>後記–2011/11/06</h1>
+
+<p>這篇也算是我大學最後的回憶之一了。記得後來得到最多的迴響是：前面用冗長的字句鋪陳，結尾卻沒有期待中的突破性與震憾性。這個故事告訴我們，當年蘿蔔說故事的能力真是令人汗顏啊…</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[傷痛的主機板]]></title>
+    <link href="http://COLDTURNIP.github.com/blog/2006/07/22/a-story-with-my-motherboard/"/>
+    <updated>2006-07-22T20:14:00+08:00</updated>
+    <id>http://COLDTURNIP.github.com/blog/2006/07/22/a-story-with-my-motherboard</id>
+    <content type="html"><![CDATA[<p>今天（2006 年七月二十一日），是個一如往常的日子。蘿蔔一如往常地在今天趕回中壢補工數（？），夏日一如往常地熱得令人不敢領教，電車一如往常地塞滿了不曾相識的過客。</p>
+
+<p>這個日子起的小小的變化，是從蘿蔔踏入台北 NOVA 開始。起初只是心理上的不安，蘿蔔那台 P4 主機一直是本寢室的特色之一–只要一打開十三捨 113 的門，就可以被那機房直比大軍壓境氣勢般的噪音所懾；室友何罪，每日被此聲所迫？這也是我感到有愧良心的一點，鑑此而有意換掉那顆 CPU 風扇。</p>
+
+<p>人回到中壢了，也花了好大的工夫把原本氣勢驚人（不止是噪音，體積也頗為驚人）的 Pentium 4 原廠風扇拆解下來，換上新買的全銅風扇。一開機，又是那令人想直接拿方陣快炮轟爛大腦的嗡鳴，尋思，原來是我錯怪 CPU 風扇了，真正的元兄原來是 5700 顯示卡的風扇，此時蘿蔔失意體前屈（六百元以及我寶貴的青春啊…）…</p>
+
+<p>既然知道了真的的問題來源，那麼也是不能坐視不管的（更何況，已經翹掉的工數課，這段時間總要有點建樹，才能平衡那良心上的不安與空洞），所以還是拿了工具、拆了顯示卡、解了風扇、清了灰，又花了很長的時間在上面，但也總算是把顯示卡風扇清完了。</p>
+
+<p>是啊，清完了，等我插上去開機之後，那噪音也杳然不聞，我的任務總算是達成了……等等，有什麼地方不對勁！？</p>
+
+<p>這顯示卡，整個的、徹底的、完全的、毫無瑕玼的，它不動了。是的，先生，它不動了，你要再買一個嗎？</p>
+
+<p>是人，這時候，沒有不慌的（越後屋例外，但可惜我不姓越後屋）。怎麼辦？</p>
+
+<p>須臾，均韋和潤易回來了。好心的均韋用了他的電腦和我的零件作了交叉測試，證明這顯示卡不是因為我把它肢解 Play 然後壞掉了（題外話，肢解 Play 這讓我想到了某 S 字頭的知名倫軟劇情），而是那塊主機板在 AGP 或是北橋方面出了問題，很有可能是我剛剛用顯示卡不停抽插抽插（？）所以它對我發出無言的抗議。（顯示卡會動，可是風扇不轉，所以顯示卡也有問題 yahooooooooooooo！）</p>
+
+<p>蘿蔔渡了一個坐立難安的夏夜。想想未來沒有電腦可以用的時刻，沒有永夜抄的彈幕可以提神，沒有用 BT 觀察封包流量宛如股票漲落的快樂，沒有洽特可以吸收無用知識的夜晚，沒有 BBS 可以攻受婊人的日子；曾經被當作是生命中理所當然的一些部份，在一夕之間被宣告禁止使用。就是因為被認為是理所當然，所以在感到流失的那一刻有特別深刻的體認。</p>
+
+<p>主機板故障、顯示卡風扇不轉，與其說是我的電腦零件為我受了傷痛，不如說是我心中的正常生活節奏缺了一角、漏了一灘血。</p>
+
+<p>所幸，今天才去借的「太平天國」小說讓我在不知所措之餘不致流為等待光陰逝去的空虛物體。也許這是冥冥之中要我在生活步調中作點修正。</p>
+
+<p>修正的正又在哪裡呢？嗯，這應該又會是另一篇八股文章的標題了。</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[「蠻子、漢人與羌族」–閱後筆記與心得]]></title>
+    <link href="http://COLDTURNIP.github.com/blog/2006/07/20/barbarian/"/>
+    <updated>2006-07-20T20:11:00+08:00</updated>
+    <id>http://COLDTURNIP.github.com/blog/2006/07/20/barbarian</id>
+    <content type="html"><![CDATA[<p>最近讀過「蠻子、漢人與羌族」一書。這本書雖然是一本田野調查之後的一小篇心得報告，但也不失其趣味；內容先從羌族的歷史概要講起，然後主要著重在羌族何以稱為「羌族」，以及在各種觀點下對於這個民族的定位。關於如何定義「羌」這個民族，作者花了很大的篇幅在討論這個問題，也可以說，這本書是為了這個問題所寫成的。</p>
+
+<p>有趣的地方也在這裡。我們所謂的羌人，現在居住在四川和西藏交界的地方，可以說是漢族與藏族的分水嶺。古羌人也許曾經是個很大的民族，依照傳說而言，禹其實也是他們的族人，甚至是「華夏」的「夏」都可能指的是古羌族。之後的世世代代，不論是中原、西域或是華南西蜀，整個「中國」經過了許多的風風雨雨，羌族也因此而分散；有的羌人隱入成為漢人的一部份，有的羌人往西邊和藏族融合，最後留在四川西部的那群人就是我們現在所稱的「羌族」。</p>
+
+<p>然而，我們曾在地理歷史學過的，地型上的崎曲常常造成民族與文化的隔閡。我們認為的那些羌族，他們自己不認為自己是羌族的；四川的崎曲不適人居，人們都是沿著「溝」蓋寨子而居的，例如我們熟知的「九寨溝」其實就是因為有九個寨的人居住在此地而得名。在他們當地人眼中，大致把住在這附近的人分為三種人。第一種人是「玀猼子」，是「蠻子」，這些人都是又髒、又臭、淫亂又沒有文化、身上常常帶著許多病菌或毒蠱、以搶奪財物為生的傢伙。第二種人是「漢人」，雖然文明，但是狡猾、貪心，充滿騙子、高官與惡德商人。最後一種人，是本地人，但是也算是「漢人」–這些人老實、純樸、容易被騙也容易吃虧，但是可愛且人畜無害。</p>
+
+<p>更有趣的是，住在下游的人認為出了山的都是不老實的漢人，而較他們上游的人都是野人蠻子；住在中游的人覺得下游的人都是漢人，更上游的人都是蠻子；更上游一點的人認為下游的人都是漢人，更上游的才是蠻子……一直到最上游住在黑水的那群人，他們不覺得自己是蠻子，那些藏族才是真正的蠻子。至於你問誰是羌族？他們應該都會說：「這裡還是漢人；你說的那個民族應該在上游找找看」。</p>
+
+<p>他們都認為自己是漢族比較老實的一支，也是禹真正的後裔。我們現稱的「羌語」，其實在當地叫「鄉談話」，而且每個溝的鄉談話都多少有點不同。在 80 年代以前，鄉野調查、民族認同感在這個地區並不流行，所以他們老一輩的人也不認為他們是什麼少數民族，但是知道他們的祖先–那些古羌人–曾經支配相當大的土地。的確，以現在的歷史資料顯示，現在比羌族大數十倍的藏族、彝族，以前可能都是羌人的一支。在有學者告訴這些羌人說：「你們是一個叫作『羌』的少數民族」之前，他們不覺得他們和漢人有異，甚至他們過去曾經參拜鎮壓羌族人有功的朝廷大將；值得一提的，這位大將本身也是羌族出身的。</p>
+
+<p>看過這本書之後，我們也許也為羌族自身的矛盾感到好笑，但如同作者在本書最後提到的，「羌族猶如一面鏡子」。我們不也常在做類似的事呢？巴哈洽眾謿笑 2cha 島民的無知，2cha 島民又認為他們跟一般人云亦云的 PTT 鄉民不同，而 PTT 鄉民也每每一廂情願地認為那些上巴哈的傢伙都是低賤無知的宅男。事實上本來就只是比率問題（雖然例子舉得有點不好，這些族群本來就跟站方的管理態度有關），並不是所有的「異族」都是可以一以概論的。缺乏宏觀的思考態度，認為世事繞著自己旋轉，本身就是一種無知。</p>
+
+<p>那麼，那些在分化族群的政客呢？誰去請他們花點時間看看這本書呢？</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[所謂的通訊]]></title>
+    <link href="http://COLDTURNIP.github.com/blog/2006/05/13/communication/"/>
+    <updated>2006-05-13T20:07:00+08:00</updated>
+    <id>http://COLDTURNIP.github.com/blog/2006/05/13/communication</id>
+    <content type="html"><![CDATA[<p>我們以濾波除去雜訊干擾，但我們因為人世間的紛擾而迷失個體。</p>
+
+<p>我們以解調獲得原始音頻，但我們因為個體間的不同而曲解異議。</p>
+
+<p>我們以埠口建立網路連線，但我們因為異議間的隔閡而無法溝通。</p>
+
+<p>我們以編碼修正傳送錯誤，但我們因為溝通間的距離而欠缺體諒。</p>
+
+<p><strong>我們用通訊改善生活品質，但我們沒有因為生活的改良而改良自己。</strong></p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[近期影片觀後感–最終兵器少女]]></title>
+    <link href="http://COLDTURNIP.github.com/blog/2006/03/11/she/"/>
+    <updated>2006-03-11T20:02:00+08:00</updated>
+    <id>http://COLDTURNIP.github.com/blog/2006/03/11/she</id>
+    <content type="html"><![CDATA[<p>「最終兵器少女 She, the Ultimate Weapon」 （The Last Love Song on This Little Planet）及其 OVA 版「Another Love Song」</p>
+
+<h1>簡介和心得</h1>
+
+<p>這部 2003 年出品的動畫是出自高橋真的漫畫作品，內容先是描寫主角和女主角之間小小的告白故事，之後是戰爭的逼近、女主角因為戰爭而發生的事，還有主角們因為戰爭的各種人性表現。</p>
+
+<p>全劇共 TV 版 13 話加上 2 話的 OVA，前者是故事主軸，OVA 稍微交待了在 TV 版中一些背後發生了什麼事，像是女主角為什麼要在落跑的那個晚上爽了男主角的約、還有為什麼在其中一場大戰後女主角希望有人能把自己殺掉。</p>
+
+<p>先說在前頭，還好我看這部作品的時候是大半夜，因為其中有好幾幕我實在看到淚水快噴出來了 QQ。這部作品的便當實在發很大，但是並不是隨隨便便就因為什麼不重要的原因就葛掉了。</p>
+
+<p>看完之後，真的是深深感到，我還能夠感到喜歡、感到生氣、感到哀傷、感到寫作業很煩、感到打電動很愉快，真的是一件十分珍貴的事（當然，寫作業還是很煩，尤其是寫不出來又不得不寫的時候…）。跟寒假才看完的「機動戰艦」比起來，前作是用一種詼諧的角度來諷刺人生的無奈，這部作品是用一種「如果」的角度來告訴世人，身為人的意義並不是那麼重要，重要的是人和人之間還能有些牽連、還能為相遇相離而動容。</p>
+
+<h1>設定與觀看這部作品的態度</h1>
+
+<p>首先，這部作品是立基於一場世界大戰，並以主角「修次」為觀點出發的動畫。首先，在這個世界觀下的地球正在發生一場類似世界大戰的戰事，對於戰爭的源頭是不可考、對抗的對象也不重要。為了這次戰爭，女主角「千瀨」被意外地被改造成所謂的「最終兵器」，似乎是在人體內殖入某種會自我增殖、生長並變形（？）成各種兵器的機構。就這樣，戰事漸漸從九洲、四國、本洲而逼近主角們的家鄉北海道，主角身邊的人也一個一個因為各種因素離去，女主角也漸漸失去她身為「人」的性質。</p>
+
+<p>全劇的最後是以地球因這場大戰毀滅收場。</p>
+
+<p>很明顯地，敵人是誰、為什麼要發動這場戰爭、還有女主角為什麼會是「最終兵器」等等問題並不是這部作品的重點，官方對於世界觀的設定也沒有多加著墨；如果是想以完整的、真實的設定態度來觀賞這部以「人」為中心的作品，或者是為了熱血的激戰而欣賞，那將會是一件令人失望且瑣然無味的事，因為這樣的態度本來就不是「最」劇所想表達的事情。</p>
+
+<p>相反的，希望你能在整部 13 話的劇中體會，身為「人」的可貴價質在哪裡。</p>
+
+<h1>缺憾</h1>
+
+<p>真的要說最大的缺憾，以我個人感覺有二：</p>
+
+<p>設定完整度不足：這就是我前段所強調的，「設定上的不周」其實算是模糊了它的焦點。但不可忽視的，以一個才剛看了兩三話的一般觀眾來說，千瀨為什麼會被改造成兵器？他們到底為了什麼而戰？看到這麼扯又違反人權的兵器計劃，加上剛開場看似平凡的「校園告白」劇情，實在很難繼續看下去。（因為我初看這部作品的想法就是這樣，直到中盤才強烈地改觀。）</p>
+
+<p>結局的大眾性不足：看完結局之後，我第一個想到的是：「啊？」（這種感覺，剛看完 TV 版的新世紀 Evangelion 的我也有同樣的感覺）。的確，最後人類是滅亡了，大概有十分鐘不知道是主角死前的內心世界還是天堂的光景，不論是誰都會在這小段感到莫名其妙。</p>
+
+<p>說真格的，以劇情內涵見長來說的動畫作品來說，這兩點都只能算是雞蛋中挑骨頭。</p>
+
+<h1>結論</h1>
+
+<p>這部劇雖沉重但不因此令人感到苦悶無聊，反而讓人想一話一話接著看下去，隨著劇中角色喜怒哀樂，這也就是它成功的地方。</p>
+
+<p>如果你想挑戰你的淚腺的話，找這部動畫來看看吧！</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[近期影片觀後感–機動戰艦 Nadesico 系列 & 一寸河山一寸血]]></title>
+    <link href="http://COLDTURNIP.github.com/blog/2006/02/25/nadesico-and-an-inch-of-blood/"/>
+    <updated>2006-02-25T19:56:00+08:00</updated>
+    <id>http://COLDTURNIP.github.com/blog/2006/02/25/nadesico-and-an-inch-of-blood</id>
+    <content type="html"><![CDATA[<p>如果說蘿蔔很喜歡觀賞動畫，那麼這樣想的人只算是瞭解蘿蔔七成。事實上，蘿蔔會去主動找來看的動畫之中，與戰爭有關的作品就佔了七八成之多（舉例來說，新世紀 Evangelion、機動戰士 Gundam 系列、超時空要塞 Micross 系列…）。</p>
+
+<p>戰爭是為了什麼？我們為何而戰？人類的歷史中總是充滿戰爭，但又為何一再重複戰爭？我們應該用什麼樣的態度來看待戰爭、敵人和仇人？類似的主題不難在這類的 ACG 作品中看見，甚至是小說、電影或是哲學著作中出現，而又因為每位作者所受的教育、習慣的思考模式以及成長環境而產生很多不同的解釋方式。</p>
+
+<ul>
+<li>富野由悠季的 Gundam 系列告訴我們：「雖然地球並沒有巨大到足以吞容所有人類的自私心態，但是人類的智慧足以超越它。」</li>
+<li>高山文彥的 Gundam 0080 立論說：「沒有人是因為『這是沒辦法的』所以就該死。」「我要戰鬥終究還是為了自己，因為害怕自己成為孤獨的人，才會去戰鬥的。」</li>
+<li>福田已津央的 Gundam SEED 認為：「被殺了所以去殺，因為殺了所以被殺，那樣，世界真的會和平嗎？」</li>
+<li>喬治盧卡斯的 Star Wars 表示：「恐懼帶來憤怒，憤怒帶來仇恨，仇恨帶來災難。」</li>
+<li>川口開治的次元艦隊提到：「如果你的必勝信念能夠躲得過這顆子彈的話…我就相信精神是無限的吧！」</li>
+<li>和月伸宏的神劍闖江湖講過：「人都死了，還有什麼幸福可言！」</li>
+<li>田中芳樹的銀河英雄傳說寫道：「為了信念的理由而殺人，其實比為金錢而殺人更下等。因為金錢至少具有萬人共通的價值，但是信念的價值則僅限定於本人才有。」</li>
+<li>大宇 DOMO 工作室的軒轅劍二有這麼一句：「也許妖魔指的不是種族，而是心吧！」</li>
+<li>荒川弘的鋼之鍊金術士強調：「人為了得到什麼需要付出同等的代價，這就是等價交換的原則；那時我們曾相信這是世界的真理，可是真正的世界並不完美，並不存在可以說明一切的原則。」</li>
+</ul>
+
+
+<p>與前文所舉的例子相較之下，機動戰艦 Nadesico 則沒有所謂明確的中心思想。這部片中的主要內容給人一種輕鬆不用大腦的感覺，但看完整部劇之後反而令我感到沉重。為什麼呢？</p>
+
+<p>因為無奈，它在它搞笑的氣氛的後面加上了很多無奈的成分。</p>
+
+<p>這整部劇的背景是地球軍和木星連合軍的戰爭。動畫的前半部很單純，主角群們開以民間公司私造戰艦的身份去和所謂的外星人「木星蟋蜴」戰鬥；地球人抵抗邪惡的外星入侵者，這本來是再正常不過的劇情，但是後來發現事情並非這麼單純──要追溯到很多年前，因為某種因素使得月球居民不能忍受政府的作法而發生朝野磨擦，事後政府一方面將這些異議份子流放到遙遠的木星、一方面對地球圈內進行情報控制，而這些「木星蟋蜴」就是當年被流放邊疆那些被追害者的後代。發現了對手也同樣是「人類」之後，當然就分出了很多派系，有的堅持為了這場戰事已經犧牲的生命報仇、有的開始尋找和平的解決方案、有的想籍機控制某些重要資源一方面壯大自己一方面控制混亂場面…</p>
+
+<p>古人有言：「死有重如泰山、有輕如鴻毛」，像是第三話時，原本 Nadesico 的原定主駕駛就領便當了，但他並不是如他所期望的「為了友情、為了大義而戰死沙場」，而是因為他不小心目睹了一群高官陣前逃逸而被槍殺；當時殺他的那為「高官」，在後來知道對手是人類的時候，一方面面臨個人道德上的矛盾，一方面也面對在戰爭中不殺人就是被殺的現實，再加上中央對他的命令不能不遵從，最後選擇坐上自己不熟悉的未完成機體迎敵而自爆了。戰爭末期，一位木連的高級將士也因巧合覺得不應該相互殘殺下去，但是在他看過木連高層開出那有如勸降一般的的「和談」條件感到不滿，就因為這樣而被他最好的朋友、被他所相信的長官在會場殺害了。</p>
+
+<p>還有一次，Nadesico 在火星表面遇敵，如果開啟防護罩則難民將會全數遇害，但又因為設備的緣故無法起飛應戰…</p>
+
+<p>如果你是艦長，只有這兩條路可以走，你要如何選擇？犧牲了船上所有成員來救這些難民？還是犧牲難民來為整場戰事保留戰力和希望？以大義來選則的話，你不能讓這些難民因為你而死、你無法預測這艘船可以救多少難民，你也不能抹殺這艘船之後救的人數會是更多人的可能性，那麼大義是什麼？你有沒有解答？就算是今天死了五百個人來救一千個人好了，為什麼這一群人沒有等同他人活下來的權利？人都死了，要如何覺得犧牲是正確的？</p>
+
+<blockquote><p>「有些事即使瞭解了也沒辦法想的開。」</p></blockquote>
+
+<p>這些疑問，在前日，因為一時興起去找來從前公視為了八年抗戰五十週年而拍「一寸山河一寸血」系列影片，才看一半，就越來越掉入無限的迷罔之中…</p>
+
+<p>戰爭中，很多事情，因為人與人之間的不瞭解而不能解。也許你只想過過平常那種混吃等死不干涉他人生活的日子，但是情勢要你打、要你逃，你不能不這麼做；敵人也是如此，他也許一點也不想和你打起架來，但是他的政府、他的長官、他的社會不允許他作出其他的選擇；命運如此，所以你只能選擇面對；我們能做的，只能在事後為了部份我們能做到的事情負些責任，所以開了戰後軍事法庭，所以懲治那些甲級戰犯，所以還原歷史真相。說是還歷史一些公道的話，那在南京保衛戰時的第八十八師那些守雨花台守不住飛機戰車、想徹軍又被南京防御工事擋在城外、真當是「進退不得」的那些犧牲者又如何說呢？</p>
+
+<p>戰爭中充滿無奈，由此衍生出許多悲哀和遺憾；人生又何嘗不是如此呢？社會又何嘗不是如此呢？企鵝曾經這樣跟我說：「即使你說要為了他人而犧牲自己，但無論如何，只要你吃了一口飯，世界上的某個地方的某個人就少吃到一口飯」。</p>
+
+<p>我想，人類創作題材常取之戰爭的原因，可能因為戰爭更能凸顯人生無奈、而人類又常感人生無奈的緣故吧？</p>
 ]]></content>
   </entry>
   

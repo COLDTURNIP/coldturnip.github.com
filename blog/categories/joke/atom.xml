@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Category: joke | 蘿蔔的待宵結界 ~ Lunatic Turnip ~]]></title>
+  <link href="http://COLDTURNIP.github.com/blog/categories/joke/atom.xml" rel="self"/>
+  <link href="http://COLDTURNIP.github.com/"/>
+  <updated>2011-11-06T23:15:31+08:00</updated>
+  <id>http://COLDTURNIP.github.com/</id>
+  <author>
+    <name><![CDATA[Raphanus Lo]]></name>
+    
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[如何吧 unsigned int 轉型為 signed int]]></title>
+    <link href="http://COLDTURNIP.github.com/blog/2009/04/29/convert-unsigned-int-into-signed-int/"/>
+    <updated>2009-04-29T20:43:00+08:00</updated>
+    <id>http://COLDTURNIP.github.com/blog/2009/04/29/convert-unsigned-int-into-signed-int</id>
+    <content type="html"><![CDATA[<p>問題：如何吧 unsigned int 轉型為 signed int？</p>
+
+<p>解答：將該 unsigned int 除以 csc（Cosecant）</p>
+
+<p>(°Д° ;)？</p>
+
+<p><blockquote><p></p></p><p><p>Because sin = 1/csc, where 1 is an integer.</p></p><p><p></p></blockquote></p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[這世界上有 10 種人]]></title>
+    <link href="http://COLDTURNIP.github.com/blog/2005/06/19/two-kinds-of-people/"/>
+    <updated>2005-06-19T18:24:00+08:00</updated>
+    <id>http://COLDTURNIP.github.com/blog/2005/06/19/two-kinds-of-people</id>
+    <content type="html"><![CDATA[<p>一種懂二進位，一種不懂。</p>
+]]></content>
+  </entry>
+  
+</feed>

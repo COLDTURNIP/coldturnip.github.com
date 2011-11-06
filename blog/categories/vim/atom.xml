@@ -1,0 +1,269 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Category: vim | 蘿蔔的待宵結界 ~ Lunatic Turnip ~]]></title>
+  <link href="http://COLDTURNIP.github.com/blog/categories/vim/atom.xml" rel="self"/>
+  <link href="http://COLDTURNIP.github.com/"/>
+  <updated>2011-11-06T23:15:31+08:00</updated>
+  <id>http://COLDTURNIP.github.com/</id>
+  <author>
+    <name><![CDATA[Raphanus Lo]]></name>
+    
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[Go snippets for VIM]]></title>
+    <link href="http://COLDTURNIP.github.com/blog/2010/11/27/go-snippets-for-vim/"/>
+    <updated>2010-11-27T22:39:00+08:00</updated>
+    <id>http://COLDTURNIP.github.com/blog/2010/11/27/go-snippets-for-vim</id>
+    <content type="html"><![CDATA[<p>好久好久沒有貼東西了。</p>
+
+<p>這幾天試用了 yoco 推薦的 NeoComplCache，
+真的很強大，所以我把 snipMate 和 superTab 移除了。
+剛好這週有莫名強烈的欲望想和 Go 混得更熟，
+所以就依著 language spec 做了一份 go.snip</p>
+
+<p>go.snip 在此，</p>
+
+<p><div><script src='https://gist.github.com/1342966.js?file='></script>
+<noscript><pre><code>snippet if
+abbr    if () {}
+    if ${1:condition} {
+        ${0:/* code */}
+    }
+
+snippet else
+    else {
+        ${0:/* code */}
+    }
+
+snippet elseif
+    else if ${1:condition} {
+        ${0:/* code */}
+    }
+
+snippet ifelse
+abbr    if cond {} else {}
+    if ${1:condition} {
+        ${2:/* code */}
+    } else {
+        ${0:/* code */}
+    }
+
+snippet for
+abbr    for cond {}
+    for ${1:condition} {
+        ${0:/* code */}
+    }
+
+snippet forcount
+abbr    for init; cond; post {}
+    for ${1:i} := ${2:init}; ${3:condition}; ${4:$1++} {
+        ${0:/* code */}
+    }
+
+snippet forrange
+abbr    for itr := range itabl {}
+    for ${1:iterator} := range ${2:iterable} {
+        ${0:/* code */}
+    }
+
+snippet switch
+abbr    switch expr {case match: ...}
+    switch ${1} {
+    case ${2:matchCase}:
+        ${0:/* code */}
+    }
+
+snippet switchCond
+abbr    switch {case cond: ...}
+    switch {
+    case ${1:condition}:
+        ${0:/* code */}
+    }
+
+snippet select
+abbr    select {case chanComm: ...}
+    select {
+    case ${1:channelCommunication}:
+        ${0:/* code */}
+    }
+
+snippet func
+abbr    func name(arg) ret {}
+    func ${1:funcName}(${2:argList}) ${3:returnList} {
+        ${0:/* code */}
+    }
+
+snippet funcmethod
+abbr    func (T) name(arg) ret {}
+    func (${1:receiver}) ${2:funcName}(${3:argList}) ${4:returnList} {
+        ${0:/* code */}
+    }
+
+snippet lambda
+abbr    func(${1:argList}) ${2:returnList} {${3:/* code */}}()${0}
+
+snippet make
+abbr    make(T)
+    make(${1})${0}
+
+snippet makesillen
+abbr    make([]T, len)
+    make([]${1:baseType}, ${2:length})${0}
+
+snippet makesilcap
+abbr    make([]T, len, cap)
+    make([]${1:baseType}, ${2:length}, ${3:capacity})${0}
+
+snippet makemap
+abbr    make(map[keyT]valT)
+    make(map[${1:keyType}] ${2:valType})${0}
+
+snippet makemapcap
+abbr    make(map[keyT]valT, cap)
+    make(map[${1:keyType}]${2:valType}, ${3:capacity})${0}
+
+snippet makechan
+abbr    make(chan T)
+    make(chan ${1:type})${0}
+
+snippet makechanbuf
+abbr    make(chan T, bufferSize)
+    make(chan ${1:type}, ${2:bufferSize})${0}
+
+snippet append
+abbr    append(dest, src...)
+    append(${1:dest}, ${2:src})${0}
+
+snippet copy
+abbr    copy(dest, src)
+    copy(${1:dest}, ${2:src})${0}
+
+snippet struct
+abbr    struct {}
+    struct {
+        ${0:/* data */}
+    }
+
+
+snippet interface
+abbr    interface {}
+    interface {${1:/* method */}}${0}
+
+snippet constlist
+abbr    const ()
+    const {
+        ${0}
+    }
+
+snippet constenum
+abbr    const (enumerators)
+    const (
+        ${1:firstValue} = ${2:/*iota expr*/}
+        ${0}
+    )
+
+snippet var
+    var ${1:variable} ${0:type}
+
+snippet varlist
+abbr    var (vars)
+    var (
+        ${0}
+    }
+
+# main function
+snippet main
+    func main() {
+        ${0:/* code */}
+    }
+
+# package initialize function
+snippet init
+    func init() {
+        ${0:/* code */}
+    }
+
+# import packages
+snippet import
+abbr    import &quot;pkg&quot;
+    import &quot;${1:package}&quot;${0}
+
+snippet importalias
+abbr    import &quot;pkg&quot;
+    import ${1:alias} &quot;${2:package}&quot;${0}
+
+snippet importlist
+abbr    import ()
+    import (
+        ${1:spec} &quot;${2:package}&quot;${0}
+    )
+
+# package name
+snippet package
+    package ${0:name}
+
+# Typedef
+snippet type
+abbr    type customType baseType
+    type ${1:customType} ${0:baseType}
+
+snippet typelist
+abbr    type ()
+    type (
+        ${1:customType} ${0:baseType}
+    )
+
+
+# Typedef struct
+snippet typestruct
+alias   structtype
+    type ${1:name} struct {
+        ${0:/* data */}
+    }
+
+# Typedef interface
+snippet typeinterface
+alias   interfacetype
+    type ${1:name} interface {
+        ${0:/* method */}
+    }
+
+snippet Printf
+    fmt.Printf(&quot;${1}\n&quot;${2})${0}
+
+snippet Println
+    fmt.Println(${1})${0}
+
+snippet Fprintf
+    fmt.Fprintf(${1:os.Stderr}, &quot;${2}\n&quot;${3})
+    ${0}
+
+snippet Fprintln
+    fmt.Fprintln(${1:os.Stderr}, ${2})
+    ${0}
+
+snippet panic
+    panic(${1:throwable})${0}
+
+snippet recover
+    recover()${0}
+
+snippet comment
+alias /*
+    /* ${1:comment} */
+    ${0}</code></pre></noscript></div>
+</p>
+
+<p>請置於 .vim/autoload/neocomplcache/sources/snippets_complete/</p>
+
+<p>而完整的 plugin fork <a href="https://github.com/COLDTURNIP/neocomplcache">在此</a>。</p>
+
+<p>Go 很好玩，快來寫 Go！</p>
+]]></content>
+  </entry>
+  
+</feed>
