@@ -1,0 +1,104 @@
+---
+layout: post
+title: "Let's study Haskell!"
+date: 2011-12-01 08:03
+comments: true
+categories: Haskell
+---
+
+我有個提案：有人想一起學 [Haskell](http://en.wikipedia.org/wiki/Haskell_%28programming_language%29) 這個程式語言嗎？
+
+這個讀書會的重點其實在於：
+
+- 什麼是 [FP (functional programming)](http://en.wikipedia.org/wiki/Functional_programming)
+- 如何寫出沒有 side effect 的函式，如何把可能造成 side effect 的部份獨立出來。
+- 如何享受資料不變性對程式設計的好處。
+- 編程函式化對於可讀性的好處，同時能精減你的程式碼行數。
+- 如何使程式更能共時化。（這點尤其重要，連你的手機都快要有四核心了）
+
+這些是一般化的概念，相信對於寫其它語言時也有重要的影響。與其說我想開一個 Haskell 的讀書會，不如說我想開個讀書會學習這些概念**順便**學一些 Haskell。
+
+不用怕需要什麼前置技能，因為我自己也是從零開始。會想組 study group 自是以學習效率考量為出發點，以下是我想學 Haskell 的動機與解釋。（tl;dr。只想知道讀書會細節的可以直接跳最後一段）
+
+# 籌組動機 #
+
+## 動機一：目前我們已經瞭解程序性程式設計的概念，但函數式程式設計到底是什麼？ ##
+
+回想一下第一次聽到程式設計中「函式」的時候的情形：「void main？這什麼玩意，什麼是 return void」。其實 function 這種東西我們國一就學過了，為什麼大學還要再學一次，而似乎還不能與過去的經驗整合？
+
+又，其實遞迴這種東西在高中就學過了（還記得萬能的數學歸納法嗎？），為什麼剛學 C 的時候怎麼就是參不透河內塔？
+
+過去我們學的，無論是 C、C++、Java、Python、Perl、Ruby、shell script…這些全部都叫作「[imperative programming lanugage](http://en.wikipedia.org/wiki/Imperative_programming)」，它們強調的是事物執行的順序。而「functional programming language」強調的是函式輸入值與輸出值的關係。簡單來說，它更像你我國中就熟知，數學課講的那種函式。
+
+如果這樣說你還是覺得怪怪的，或是產生「數學式怎麼可能拿來寫程式」「光是想就覺的很麻煩」之類的疑問，那我們更該來一起學習一下這個議題，因為我也還在學。（好吧，我會想繼續深入的原因，也是因為從某些概念裡嚐到甜頭…）
+
+## 動機二：既然要找一個 FP language 來學，那麼就要學一個實用性高的。 ##
+
+一般以訓練導向而言，學習 FP 較為眾人所推薦的作法是從學習 Lisp 開始。Lisp 由人工智慧之父 [John McCarthy](http://en.wikipedia.org/wiki/John_McCarthy_%28computer_scientist%29) 在 1958 年發明（*甚至比 C 語言的前身 B 語言還早出現！*可惜他老人家前陣子仙逝時，大家忙著悼念 Steve Jobs，少數人注意到 Dennis Ritchie，更少人注意到這位高階語言之父），之後衍伸出許多方言，包括 Emacs 用來寫設定檔用的 [elisp](http://en.wikipedia.org/wiki/Emacs_Lisp)、為解決一般化問題的 [common Lisp](http://en.wikipedia.org/wiki/Common_lisp)、目前在學術界研究平行處理實作時常用的 [scheme](http://en.wikipedia.org/wiki/Scheme_%28programming_language%29) 等等。這個語言也直接或間接導致其它語言的產生，例如 Java 界的 [Clojure](http://en.wikipedia.org/wiki/Clojure)，或是催生其它語言的某些特性，證例就是 C＋＋ 今年終於定案的新標準 C++11、以及同是今年完成的 Java 7，都不約而同有意加入[匿名函式 lambda](http://en.wikipedia.org/wiki/Lambda_%28programming%29) 的概念（最後 C++ 成功加入了，Java 這邊因為 syntax 搞不定最後決議不加）。
+
+但是 Lisp 終究難成大業ーー這樣的說法問題不是出在語言本身。光就語言統一性而言，以 C/C++ 為例，有 ANSI 而言 ISO 為之制定語言標準；Java 之前則由 Sun 控制其生態。反觀 Lisp，如前段所言，Lisp 有非常多種方言，過於自由的結果就是互相不相容，以致鮮有那種一般性可用的 library 與 framework。再次強調，這樣的說法並不完全代表 Lisp 生態中沒有大型應用，例如程式設計哲學名著《駭客與畫家》的作者 Paul Graham 提出一個反例，他在 1995 年以 Lisp 架構出 Viaweb 的線上商店系統，於 1998 年被 Yahoo 收購，最後成為 Yahoo Shopping 的基礎。
+
+回到實用性問題。Lisp 除了看起來比較像玩具（抱歉，我無意批評，只是一時想不到比較合適的比喻）以外，其實它相當易學。這是個相當大的優點，但也因此，如果我想學 Lisp，那麼我也懶得大費週章想找人開讀書會了。（對於想學 Lisp 的人來說，《[Practical Common Lisp](http://www.gigamonkeys.com/book/)》相當不錯！）
+
+## 動機三：purely functional programming language ##
+
+現在先剔除了 Lisp，剩下的熱門選擇有幾個：[Erlang](http://en.wikipedia.org/wiki/Erlang_%28programming_language%29)、[Scala](http://en.wikipedia.org/wiki/Scala_%28programming_language%29) 和 Haskell（F#？我是個 UNIX-like 平台上的 programmer，現在還不想討論 Microsoft .net Framework 的產物…）
+
+先來談談 Scala。這個程式語言目前是 Java 界取代 Java 呼聲最高的程式語言，其優勢在於
+- 高度的彈性（其命名即自 scalable 而來），同時具備物件導向與函式導向程式語言特性
+- 與 Java 完全相容，編譯出來的也是與 Java 一致的 byte code，因此也享受其跨平台的優勢
+- 簡潔，原本 Java 要 10 行的程式碼，用 Scala 可能只需要 3 行。
+其實 Scala 才是我最想弄熟的，因為 Java 的資源實在太豐富，以商業應用而言 JVM 平台應用也是最有需求的。與 Java 相容代表省掉自己寫 library 與 framework 的工（沒錯，我們甚至能直接用 Scala 為 Android 寫 app）。舉公司為例，德意志銀行從前年開始用 Scala 建構其核心系統；Twitter 原本使用 Ruby 建完整個系統，最後基於效能與開發時間考量而把 critical component 以 Scala 改寫；HTC 從去年開始打算建構其自有的線上服務，該部門目前招人的首位也要求 Scala。
+
+Scala 同時具有 imperative 與 functional programming 的特性，但只學過前者的人很容易把這個語言作為一種一般的 imperative OOP language 來使用ーー但其威力主要是在 functional 這邊的特性。要再舉例的話，查一下 Scala 在 for 表示式的展開方式很容易能理解為何說其為 functional programming language。再者，Scala 作為一種 funcational programming language，但它並不是 purely functional programming language（Lisp 其實也不是）。以學習的角度而言，我仍會想學個純一點的。
+
+## 動機四：static type ##
+
+static type system 大家一定超熟的。我們寫 C 寫 Java，此其中所有的函式、所有的變數都一定會有一個固定的 type，當你寫出 int intNum = 3.4 的時候編譯器一定會哀嚎說你又出包了，這就是 static type。詳細定義可以參考 Widipedia 的「Type system」條目。
+
+現在再來談談 Erlang。如果翻過書也算是有接觸過程式語言的話，這其實算是我第一個接觸的 FP language。這個語言最早設計用來作為電信網路服務的基礎，由於沒有人希望在和女友吵架的時候因為基地台當機而斷線，或是同時有幾千人一起打電話時會有人繳了電話費卻撥不通，所以 Erlang 底層的 virtual machine 設計理念是能處理高度的平行運算、同時又要允許任何一個元件在運行途中掛掉時不會把整個系統同時拖下水（容錯）。其實這個語言也不錯，現在許多線上 service 注意到上面這些特點也將 Erlang 導入產品之中。
+
+Erlang 是一種 purely FP language，但我不想選 Erlang 的原因是因為 dynamic type。與 Lisp 相同，Erlang 沒有所謂型態宣告，所有的東西都如果不是 list 就是 atom。這樣用起來固然方便，但也失去某些好處，例如編譯期最佳化（如同 C 為支援泛型而傳入 *void，我們在 Erlang 傳入沒有型態資訊的參照，型態資訊全部在執行期由 VM 檢查，編譯器沒有型態資訊無從為之作出處理）。型別處理雖然有時候會讓人覺得麻煩，但可以為我們帶來相當多的好處，直接讓編譯器幫我們 debug，也減少在程式丟出去跑半天才發生 TypeMismatchException 之類的鳥事。
+
+## 動機五：Just Haskell ##
+
+於是，相對於上面提出的兩個缺點，Haskell 是
+
+- purely functional
+- static type
+
+這兩點是我比較之後主要會選擇它的因素。回到我一開始所說的，從 Hasekll study group 裡，我們預期學到的是：
+
+> - 什麼是 [FP (functional programming)](http://en.wikipedia.org/wiki/Functional_programming)
+> - 如何寫出沒有 side effect 的函式，如何把可能造成 side effect 的部份獨立出來。
+> - 如何享受資料不變性對程式設計的好處。
+> - 編程函式化對於可讀性的好處，同時能精減你的程式碼行數。
+> - 如何使程式更能共時化。（這點尤其重要，連你的手機都快要有四核心了）
+> 
+> 這些是一般化的概念，相信對於寫其它語言時也有重要的影響。與其說我想開一個 Haskell 的讀書會，不如說我想開個讀書會學習這些概念**順便**學一些 Haskell。
+
+學完這些東西，回頭來學 Erlang 和 Scala 門檻自然也會降低。
+
+# 加映：語言執行效率比較 #
+
+以下是沒啥意義的賽豬公，寫給追求執行效率的讀者看。也許有人會懷疑上面提到的幾個 programming language 的執行效率，於是有人做出實際的 [benchmark](http://shootout.alioth.debian.org/u32/which-programming-languages-are-fastest.php)：
+
+以 C 在最快的 test case 的耗時是 1 的話，幾個一般熟知的語言在所有 test case 的平均耗時
+
+- C : 1.02 times
+- C++ : 1.07 times
+- Java 7 : 1.47 times
+- Scala : 2.03 times
+- C# : 2.22 times
+- Haskell : 2.48 times
+- Lisp : 2.69 times
+- Erlang : 9.76 times
+- Ruby 1.9 : 36.43 times
+- Python 3 : 58.05 times
+
+當然這影響的因素很多，包括底層的 VM 實作品運行效率、編譯器最佳化功力等等等。但其實比起 script language，上面提到的這幾個 FP language 都還算挺快的ーー當然快不過 C，可是就算是 C 也一定快不過 ASM。大家都知道，如果你不是為了寫系統核心中最 critical 的部份，這些眉眉角角其實沒有重要到「非某一種語言不可」，效能問題往往是演算法不夠好，或是對編譯器特性不夠熟悉；除此之外，可讀性、擴展性、開發速度等等在軟體工程上也是重要的考量，在選擇工具時最順手的那一個通常是一個好的開始。
+
+
+# 關於讀書會的細節 #
+
+欸，可以再談，人少的話好解決，約個什麼麥當當或咖啡店開個筆電圍一圈就解決了，也沒打算要做投影片什麼的太麻煩。書的話我選好了，O'Reilly 的《[Real World Haskell](http://book.realworldhaskell.org/read/)》這本，意者也可以私下找我拿 PDF。簡單來說，需要付出的成本沒有，只需要看書與討論就夠了。
