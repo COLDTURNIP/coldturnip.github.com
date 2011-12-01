@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Haskell | 蘿蔔的待宵結界 ~ Lunatic Turnip ~]]></title>
   <link href="http://COLDTURNIP.github.com/blog/categories/haskell/atom.xml" rel="self"/>
   <link href="http://COLDTURNIP.github.com/"/>
-  <updated>2011-12-01T09:01:09+08:00</updated>
+  <updated>2011-12-01T09:22:09+08:00</updated>
   <id>http://COLDTURNIP.github.com/</id>
   <author>
     <name><![CDATA[Raphanus Lo]]></name>
@@ -49,7 +49,7 @@
 
 <h2>動機二：既然要找一個 FP language 來學，那麼就要學一個實用性高的。</h2>
 
-<p>一般以訓練導向而言，學習 FP 較為眾人所推薦的作法是從學習 Lisp 開始。Lisp 由人工智慧之父 <a href="http://en.wikipedia.org/wiki/John_McCarthy_%28computer_scientist%29">John McCarthy</a> 在 1958 年發明（<em>甚至比 C 語言的前身 B 語言還早出現！</em>可惜他老人家前陣子仙逝時，大家忙著悼念 Steve Jobs，少數人注意到 Dennis Ritchie，更少人注意到這位高階語言之父），之後衍伸出許多方言，包括 Emacs 用來寫設定檔用的 <a href="http://en.wikipedia.org/wiki/Emacs_Lisp">elisp</a>、為解決一般化問題的 <a href="http://en.wikipedia.org/wiki/Common_lisp">common Lisp</a>、目前在學術界研究平行處理實作時常用的 <a href="http://en.wikipedia.org/wiki/Scheme_%28programming_language%29">scheme</a> 等等。這個語言也直接或間接導致其它語言的產生，例如 Java 界的 <a href="http://en.wikipedia.org/wiki/Clojure">Clojure</a>，或是催生其它語言的某些特性，證例就是 C＋＋ 今年終於定案的新標準 C++11、以及同是今年完成的 Java 7，都不約而同有意加入<a href="http://en.wikipedia.org/wiki/Lambda_%28programming%29">匿名函式 lambda</a> 的概念（最後 C++ 成功加入了，Java 這邊因為 syntax 搞不定最後決議不加）。</p>
+<p>一般以訓練導向而言，學習 FP 較為眾人所推薦的作法是從學習 Lisp 開始。Lisp 由人工智慧之父 <a href="http://en.wikipedia.org/wiki/John_McCarthy_%28computer_scientist%29">John McCarthy</a> 在 1958 年發明（<em>甚至比 C 語言的前身 B 語言還早出現！</em>可惜他老人家前陣子仙逝時，大家忙著悼念 Steve Jobs，少數人注意到 Dennis Ritchie，更少人注意到這位高階語言之父），之後衍伸出許多方言，包括 Emacs 用來寫設定檔用的 <a href="http://en.wikipedia.org/wiki/Emacs_Lisp">elisp</a>、為解決一般化問題的 <a href="http://en.wikipedia.org/wiki/Common_lisp">common Lisp</a>、目前在學術界研究平行處理實作時常用的 <a href="http://en.wikipedia.org/wiki/Scheme_%28programming_language%29">scheme</a> 等等。這個語言也直接或間接導致其它語言的產生，例如 Java 界的 <a href="http://en.wikipedia.org/wiki/Clojure">Clojure</a>，或是催生其它語言的某些特性，證例就是 C++ 今年終於定案的新標準 C++11、以及同是今年完成的 Java 7，都不約而同有意加入<a href="http://en.wikipedia.org/wiki/Lambda_%28programming%29">匿名函式 lambda</a> 的概念（最後 C++ 成功加入了，Java 這邊因為 syntax 搞不定最後決議不加）。</p>
 
 <p>但是 Lisp 終究難成大業ーー這樣的說法問題不是出在語言本身。光就語言統一性而言，以 C/C++ 為例，有 ANSI 而言 ISO 為之制定語言標準；Java 之前則由 Sun 控制其生態。反觀 Lisp，如前段所言，Lisp 有非常多種方言，過於自由的結果就是互相不相容，以致鮮有那種一般性可用的 library 與 framework。再次強調，這樣的說法並不完全代表 Lisp 生態中沒有大型應用，例如程式設計哲學名著《駭客與畫家》的作者 Paul Graham 提出一個反例，他在 1995 年以 Lisp 架構出 Viaweb 的線上商店系統，於 1998 年被 Yahoo 收購，最後成為 Yahoo Shopping 的基礎。</p>
 
