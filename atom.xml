@@ -4,7 +4,7 @@
   <title><![CDATA[蘿蔔的待宵結界 ~ Lunatic Turnip ~]]></title>
   <link href="http://COLDTURNIP.github.com/atom.xml" rel="self"/>
   <link href="http://COLDTURNIP.github.com/"/>
-  <updated>2011-12-18T15:27:55+08:00</updated>
+  <updated>2011-12-26T10:21:49+08:00</updated>
   <id>http://COLDTURNIP.github.com/</id>
   <author>
     <name><![CDATA[Raphanus Lo]]></name>
@@ -142,7 +142,7 @@
 
 <p>現在再來談談 Erlang。如果翻過書也算是有接觸過程式語言的話，這其實算是我第一個接觸的 FP language。這個語言最早設計用來作為電信網路服務的基礎，由於沒有人希望在和女友吵架的時候因為基地台當機而斷線，或是同時有幾千人一起打電話時會有人繳了電話費卻撥不通，所以 Erlang 底層的 virtual machine 設計理念是能處理高度的平行運算、同時又要允許任何一個元件在運行途中掛掉時不會把整個系統同時拖下水（容錯）。其實這個語言也不錯，現在許多線上 service 注意到上面這些特點也將 Erlang 導入產品之中。</p>
 
-<p>Erlang 是一種 purely FP language，但我不想選 Erlang 的原因是因為 dynamic type。與 Lisp 相同，Erlang 沒有所謂型態宣告，所有的東西都如果不是 list 就是 atom。這樣用起來固然方便，但也失去某些好處，例如編譯期最佳化（如同 C 為支援泛型而傳入 *void，我們在 Erlang 傳入沒有型態資訊的參照，型態資訊全部在執行期由 VM 檢查，編譯器沒有型態資訊無從為之作出處理）。型別處理雖然有時候會讓人覺得麻煩，但可以為我們帶來相當多的好處，直接讓編譯器幫我們 debug，也減少在程式丟出去跑半天才發生 TypeMismatchException 之類的鳥事。</p>
+<p>Erlang 並非一種 purely funcitonal language（相反地，為了使它的實用性提高，它相當依賴各種 side effect），且它使用的 type system 為 dynamic type。與 Lisp 相同，Erlang 沒有所謂型態宣告，所有的東西都如果不是 list 就是 atom。這樣用起來固然方便，但也失去某些好處，例如編譯期最佳化（如同 C 為支援泛型而傳入 *void，我們在 Erlang 傳入沒有型態資訊的參照，型態資訊全部在執行期由 VM 檢查，編譯器沒有型態資訊無從為之作出處理）。型別處理雖然有時候會讓人覺得麻煩，但可以為我們帶來相當多的好處，直接讓編譯器幫我們 debug，也減少在程式丟出去跑半天才發生 TypeMismatchException 之類的鳥事。</p>
 
 <h2>動機五：Just Haskell</h2>
 
